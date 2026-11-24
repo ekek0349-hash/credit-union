@@ -27,13 +27,20 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
-document.getElementById("game").prepend(renderer.domElement);
+const gameElement = document.getElementById("game");
+
+if (!gameElement) {
+  throw new Error("HTML에서 id가 game인 요소를 찾을 수 없습니다.");
+}
+
+gameElement.prepend(renderer.domElement);
 
 const clock = new THREE.Clock();
 
 const $ = id => document.getElementById(id);
 
 const keys = {};
+
 let yaw = 0;
 let pitch = 0;
 let pointerLocked = false;
@@ -47,6 +54,7 @@ let satisfaction = 100;
 let completedCustomers = 0;
 
 const customers = [];
+
 const customerPositions = [
   [-4.2, -1.5],
   [-1.4, -1.5],
@@ -55,28 +63,65 @@ const customerPositions = [
 ];
 
 const materials = {
-  floor: new THREE.MeshStandardMaterial({ color: 0xc7c4ba, roughness: 0.85 }),
-  wall: new THREE.MeshStandardMaterial({ color: 0xf1f3f2, roughness: 0.9 }),
-  blue: new THREE.MeshStandardMaterial({ color: 0x174e70 }),
-  wood: new THREE.MeshStandardMaterial({ color: 0x967454 }),
-  darkWood: new THREE.MeshStandardMaterial({ color: 0x60452f }),
+  floor: new THREE.MeshStandardMaterial({
+    color: 0xc7c4ba,
+    roughness: 0.85
+  }),
+
+  wall: new THREE.MeshStandardMaterial({
+    color: 0xf1f3f2,
+    roughness: 0.9
+  }),
+
+  blue: new THREE.MeshStandardMaterial({
+    color: 0x174e70
+  }),
+
+  wood: new THREE.MeshStandardMaterial({
+    color: 0x967454
+  }),
+
+  darkWood: new THREE.MeshStandardMaterial({
+    color: 0x60452f
+  }),
+
   glass: new THREE.MeshStandardMaterial({
     color: 0x9dcbd7,
     transparent: true,
     opacity: 0.22
   }),
-  white: new THREE.MeshStandardMaterial({ color: 0xffffff }),
-  black: new THREE.MeshStandardMaterial({ color: 0x20252a }),
-  gold: new THREE.MeshStandardMaterial({ color: 0xc6a45c })
+
+  white: new THREE.MeshStandardMaterial({
+    color: 0xffffff
+  }),
+
+  black: new THREE.MeshStandardMaterial({
+    color: 0x20252a
+  }),
+
+  gold: new THREE.MeshStandardMaterial({
+    color: 0xc6a45c
+  })
 };
 
 function mat(color, roughness = 0.75) {
-  return new THREE.MeshStandardMaterial({ color, roughness });
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness
+  });
 }
 
 /* =========================================
    2. 3D 물체 생성 함수
 ========================================= */
+
+function getValidParent(parent) {
+  if (parent && typeof parent.add === "function") {
+    return parent;
+  }
+
+  return scene;
+}
 
 function box(x, y, z, sx, sy, sz, material, parent = scene) {
   const mesh = new THREE.Mesh(
@@ -87,15 +132,16 @@ function box(x, y, z, sx, sy, sz, material, parent = scene) {
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  parent.add(mesh);
+
+  getValidParent(parent).add(mesh);
 
   return mesh;
 }
 
-// 수정: parent가 전달되지 않으면 scene에 추가
+// 부모 객체가 없거나 잘못 전달되어도 scene에 추가
 function sphere(x, y, z, sx, sy, sz, material, parent = scene) {
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 20, 16),
+    new THREE.SphereGeometry(1, 24, 16),
     material
   );
 
@@ -103,21 +149,24 @@ function sphere(x, y, z, sx, sy, sz, material, parent = scene) {
   mesh.scale.set(sx, sy, sz);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  parent.add(mesh);
+
+  const target = getValidParent(parent);
+  target.add(mesh);
 
   return mesh;
 }
 
 function cylinder(x, y, z, rt, rb, h, material, parent = scene) {
   const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(rt, rb, h, 20),
+    new THREE.CylinderGeometry(rt, rb, h, 24),
     material
   );
 
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  parent.add(mesh);
+
+  getValidParent(parent).add(mesh);
 
   return mesh;
 }
@@ -126,19 +175,40 @@ function cylinder(x, y, z, rt, rb, h, material, parent = scene) {
    3. 조명
 ========================================= */
 
-scene.add(new THREE.HemisphereLight(0xe9f5ff, 0x7c7161, 2));
+scene.add(
+  new THREE.HemisphereLight(
+    0xe9f5ff,
+    0x7c7161,
+    2
+  )
+);
 
-const mainLight = new THREE.DirectionalLight(0xfff2dc, 2.1);
+const mainLight = new THREE.DirectionalLight(
+  0xfff2dc,
+  2.1
+);
+
 mainLight.position.set(-5, 10, 7);
 mainLight.castShadow = true;
 mainLight.shadow.mapSize.set(2048, 2048);
+
 scene.add(mainLight);
 
-const ceilingLight1 = new THREE.PointLight(0xffffff, 55, 15);
+const ceilingLight1 = new THREE.PointLight(
+  0xffffff,
+  55,
+  15
+);
+
 ceilingLight1.position.set(-4, 4.5, 0);
 scene.add(ceilingLight1);
 
-const ceilingLight2 = new THREE.PointLight(0xffffff, 55, 15);
+const ceilingLight2 = new THREE.PointLight(
+  0xffffff,
+  55,
+  15
+);
+
 ceilingLight2.position.set(4, 4.5, 0);
 scene.add(ceilingLight2);
 
@@ -148,7 +218,9 @@ scene.add(ceilingLight2);
 
 function addTextSign(text, x, y, z, size = 0.3) {
   return box(
-    x, y, z,
+    x,
+    y,
+    z,
     Math.max(0.6, text.length * size * 0.8),
     size * 1.2,
     0.04,
@@ -157,7 +229,15 @@ function addTextSign(text, x, y, z, size = 0.3) {
 }
 
 function createPlant(x, y, z) {
-  cylinder(x, y + 0.35, z, 0.35, 0.25, 0.7, mat(0x9a6848));
+  cylinder(
+    x,
+    y + 0.35,
+    z,
+    0.35,
+    0.25,
+    0.7,
+    mat(0x9a6848)
+  );
 
   for (let i = 0; i < 6; i++) {
     const leaf = sphere(
@@ -167,7 +247,8 @@ function createPlant(x, y, z) {
       0.22,
       0.55,
       0.18,
-      mat(0x347d4a)
+      mat(0x347d4a),
+      scene
     );
 
     leaf.rotation.z = Math.sin(i) * 0.4;
@@ -177,14 +258,23 @@ function createPlant(x, y, z) {
 function createRoom() {
   // 바닥과 벽
   box(0, -0.15, 0, 20, 0.3, 20, materials.floor);
+
   box(0, 3, -10, 20, 6, 0.3, materials.wall);
   box(-10, 3, 0, 0.3, 6, 20, materials.wall);
   box(10, 3, 0, 0.3, 6, 20, materials.wall);
+
   box(0, 5.8, 0, 20, 0.2, 20, materials.white);
 
   // 신협 로고 벽
   box(0, 3.7, -9.78, 7, 1.3, 0.08, materials.blue);
-  addTextSign("춘천신협", 0, 3.7, -9.68, 0.7);
+
+  addTextSign(
+    "춘천신협",
+    0,
+    3.7,
+    -9.68,
+    0.7
+  );
 
   // 창구
   for (let i = 0; i < 4; i++) {
@@ -203,7 +293,14 @@ function createRoom() {
 
     // 창구 번호
     box(x, 2.2, -0.1, 0.65, 0.32, 0.12, materials.blue);
-    addTextSign(String(i + 1) + "번 창구", x, 2.2, -0.02, 0.18);
+
+    addTextSign(
+      String(i + 1) + "번 창구",
+      x,
+      2.2,
+      -0.02,
+      0.18
+    );
   }
 
   // 고객 대기 의자
@@ -214,7 +311,15 @@ function createRoom() {
     box(x, 0.9, 3.55, 1.25, 0.8, 0.16, materials.blue);
 
     for (const dx of [-0.48, 0.48]) {
-      cylinder(x + dx, 0.25, 3.2, 0.045, 0.045, 0.55, materials.black);
+      cylinder(
+        x + dx,
+        0.25,
+        3.2,
+        0.045,
+        0.045,
+        0.55,
+        materials.black
+      );
     }
   }
 
@@ -222,6 +327,7 @@ function createRoom() {
   box(-8.5, 1.35, -3.8, 1.2, 2.7, 0.7, materials.blue);
   box(-8.5, 1.7, -3.42, 0.85, 0.65, 0.04, mat(0x80c5d9));
   box(-8.5, 0.95, -3.42, 0.45, 0.2, 0.04, materials.black);
+
   addTextSign("ATM", -8.5, 2.9, -3.3, 0.3);
 
   // 상담실 유리벽
@@ -237,6 +343,7 @@ function createRoom() {
 
   // 시계
   cylinder(0, 4.8, -9.55, 0.65, 0.65, 0.08, materials.white);
+
   box(0, 4.8, -9.45, 0.04, 0.42, 0.03, materials.black);
   box(0.15, 4.8, -9.43, 0.3, 0.04, 0.03, materials.black);
 
@@ -244,6 +351,7 @@ function createRoom() {
   box(7.2, 0.8, 2.2, 2.1, 0.15, 1.2, materials.wood);
   box(7.2, 1.35, 1.9, 0.85, 0.65, 0.08, materials.black);
   box(7.2, 1.35, 1.85, 0.74, 0.5, 0.025, mat(0x8ac2d3));
+
   addTextSign("업무 전산", 7.2, 2.1, 1.85, 0.22);
 }
 
@@ -261,10 +369,20 @@ const firstNames = [
 ];
 
 const jobs = [
-  "회사원", "자영업자", "음식점 운영", "퇴직자",
-  "공무원", "요양보호사", "건설업 종사자", "주부",
-  "배달업 종사자", "운수업 종사자", "병원 근무",
-  "골프장 캐디", "프리랜서", "연금 수령자"
+  "회사원",
+  "자영업자",
+  "음식점 운영",
+  "퇴직자",
+  "공무원",
+  "요양보호사",
+  "건설업 종사자",
+  "주부",
+  "배달업 종사자",
+  "운수업 종사자",
+  "병원 근무",
+  "골프장 캐디",
+  "프리랜서",
+  "연금 수령자"
 ];
 
 const scenarios = [
@@ -527,13 +645,39 @@ function createCustomerData() {
 function createHuman(customer, x, z) {
   const group = new THREE.Group();
 
-  const skin = mat(randomItem([0xf1c7a5, 0xe5b58f, 0xd8a47f, 0xf4d2b4]));
-  const hair = mat(randomItem([0x201812, 0x493020, 0x171717, 0x786044, 0x29212a]));
-  const clothes = mat(randomItem([
-    0x345d7d, 0x725b83, 0x456b58, 0x9b5f54,
-    0x333f50, 0x9a825b, 0x526f86, 0x704e3e
+  const skin = mat(randomItem([
+    0xf1c7a5,
+    0xe5b58f,
+    0xd8a47f,
+    0xf4d2b4
   ]));
-  const pants = mat(randomItem([0x293747, 0x454545, 0x263c35, 0x655b50]));
+
+  const hair = mat(randomItem([
+    0x201812,
+    0x493020,
+    0x171717,
+    0x786044,
+    0x29212a
+  ]));
+
+  const clothes = mat(randomItem([
+    0x345d7d,
+    0x725b83,
+    0x456b58,
+    0x9b5f54,
+    0x333f50,
+    0x9a825b,
+    0x526f86,
+    0x704e3e
+  ]));
+
+  const pants = mat(randomItem([
+    0x293747,
+    0x454545,
+    0x263c35,
+    0x655b50
+  ]));
+
   const shoes = mat(0x252525);
   const eyeWhite = mat(0xffffff);
   const iris = mat(0x38251b);
@@ -548,11 +692,18 @@ function createHuman(customer, x, z) {
   torso.position.y = 1.25;
   torso.scale.set(1, 1.05, 0.7);
   torso.castShadow = true;
+
   group.add(torso);
 
   // 목과 얼굴
   cylinder(0, 1.83, 0, 0.11, 0.12, 0.22, skin, group);
-  sphere(0, 2.15, 0.03, 0.35, 0.43, 0.31, skin, group);
+
+  sphere(
+    0, 2.15, 0.03,
+    0.35, 0.43, 0.31,
+    skin,
+    group
+  );
 
   // 귀
   sphere(-0.35, 2.15, 0.02, 0.09, 0.14, 0.07, skin, group);
@@ -560,14 +711,48 @@ function createHuman(customer, x, z) {
 
   // 눈과 눈썹
   for (const side of [-1, 1]) {
-    sphere(side * 0.13, 2.22, 0.31, 0.075, 0.09, 0.045, eyeWhite, group);
-    sphere(side * 0.13, 2.22, 0.35, 0.035, 0.05, 0.025, iris, group);
-    sphere(side * 0.13, 2.24, 0.37, 0.014, 0.018, 0.012, eyeWhite, group);
+    sphere(
+      side * 0.13,
+      2.22,
+      0.31,
+      0.075,
+      0.09,
+      0.045,
+      eyeWhite,
+      group
+    );
+
+    sphere(
+      side * 0.13,
+      2.22,
+      0.35,
+      0.035,
+      0.05,
+      0.025,
+      iris,
+      group
+    );
+
+    sphere(
+      side * 0.13,
+      2.24,
+      0.37,
+      0.014,
+      0.018,
+      0.012,
+      eyeWhite,
+      group
+    );
 
     const brow = box(
-      side * 0.13, 2.34, 0.31,
-      0.13, 0.025, 0.035,
-      hair, group
+      side * 0.13,
+      2.34,
+      0.31,
+      0.13,
+      0.025,
+      0.035,
+      hair,
+      group
     );
 
     brow.rotation.z = side * -0.08;
@@ -586,7 +771,9 @@ function createHuman(customer, x, z) {
       -0.16 + i * 0.16,
       2.43 - Math.abs(i - 1) * 0.04,
       0.25,
-      0.11, 0.12, 0.1,
+      0.11,
+      0.12,
+      0.1,
       hair,
       group
     );
@@ -602,16 +789,28 @@ function createHuman(customer, x, z) {
     arm.position.set(side * 0.39, 1.32, 0);
     arm.rotation.z = side * -0.13;
     arm.castShadow = true;
+
     group.add(arm);
 
-    sphere(side * 0.4, 0.99, 0.03, 0.11, 0.13, 0.11, skin, group);
+    sphere(
+      side * 0.4,
+      0.99,
+      0.03,
+      0.11,
+      0.13,
+      0.11,
+      skin,
+      group
+    );
 
     for (let f = 0; f < 4; f++) {
       sphere(
         side * 0.4 + (f - 1.5) * 0.035,
         0.91,
         0.05,
-        0.025, 0.07, 0.025,
+        0.025,
+        0.07,
+        0.025,
         skin,
         group
       );
@@ -627,9 +826,19 @@ function createHuman(customer, x, z) {
 
     leg.position.set(side * 0.15, 0.47, 0);
     leg.castShadow = true;
+
     group.add(leg);
 
-    sphere(side * 0.15, 0.12, 0.09, 0.15, 0.09, 0.27, shoes, group);
+    sphere(
+      side * 0.15,
+      0.12,
+      0.09,
+      0.15,
+      0.09,
+      0.27,
+      shoes,
+      group
+    );
   }
 
   // 여성 긴 머리
@@ -647,6 +856,7 @@ function createHuman(customer, x, z) {
       );
 
       ring.position.set(side * 0.13, 2.22, 0.36);
+
       group.add(ring);
     }
 
@@ -655,7 +865,16 @@ function createHuman(customer, x, z) {
 
   // 옷 단추
   for (let i = 0; i < 3; i++) {
-    sphere(0, 1.45 - i * 0.14, 0.235, 0.025, 0.025, 0.02, materials.gold, group);
+    sphere(
+      0,
+      1.45 - i * 0.14,
+      0.235,
+      0.025,
+      0.025,
+      0.02,
+      materials.gold,
+      group
+    );
   }
 
   // 발밑 그림자
@@ -670,6 +889,7 @@ function createHuman(customer, x, z) {
 
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.015;
+
   group.add(shadow);
 
   group.position.set(x, 0, z);
@@ -677,6 +897,7 @@ function createHuman(customer, x, z) {
   group.userData.customer = customer;
 
   scene.add(group);
+
   customer.mesh = group;
 
   return group;
@@ -689,9 +910,11 @@ function createHuman(customer, x, z) {
 function spawnCustomers() {
   for (let i = 0; i < customerPositions.length; i++) {
     const customer = createCustomerData();
+
     customer.positionIndex = i;
 
     const [x, z] = customerPositions[i];
+
     createHuman(customer, x, z);
 
     customers.push(customer);
@@ -709,6 +932,7 @@ function replaceCustomer(oldCustomer) {
   customer.positionIndex = index;
 
   const [x, z] = customerPositions[index];
+
   createHuman(customer, x, z);
 
   customers[index] = customer;
@@ -725,7 +949,8 @@ function openCustomer(customer) {
 
   activeCustomer = customer;
 
-  $("customer-name").textContent = customer.name + " 고객님";
+  $("customer-name").textContent =
+    customer.name + " 고객님";
 
   $("customer-profile").innerHTML = `
     <span class="profile-tag">${customer.age}세</span>
@@ -736,11 +961,14 @@ function openCustomer(customer) {
     <span class="profile-tag">${customer.scenario.type}</span>
   `;
 
-  $("customer-message").textContent = customer.scenario.message;
+  $("customer-message").textContent =
+    customer.scenario.message;
+
   $("dialog-feedback").textContent = "";
   $("dialog-feedback").style.color = "#176d48";
 
   const answerList = $("answer-list");
+
   answerList.innerHTML = "";
 
   customer.scenario.options.forEach((option, index) => {
@@ -748,14 +976,16 @@ function openCustomer(customer) {
 
     button.className = "answer-button";
     button.textContent = `${index + 1}. ${option}`;
-    button.addEventListener("click", () => chooseAnswer(index));
+
+    button.addEventListener("click", () => {
+      chooseAnswer(index);
+    });
 
     answerList.appendChild(button);
   });
 
   $("dialog").classList.remove("hidden");
 
-  // 상담창을 열 때 포인터 잠금 해제
   if (document.pointerLockElement) {
     document.exitPointerLock();
   }
@@ -769,10 +999,12 @@ function chooseAnswer(index) {
 
   if (correct) {
     satisfaction = Math.min(100, satisfaction + 2);
+
     sales += customer.scenario.reward;
 
     $("dialog-feedback").textContent =
-      "상담이 완료되었습니다. " + customer.scenario.feedback;
+      "상담이 완료되었습니다. " +
+      customer.scenario.feedback;
 
     $("dialog-feedback").style.color = "#176d48";
 
@@ -789,6 +1021,7 @@ function chooseAnswer(index) {
   }
 
   completedCustomers++;
+
   updateHUD();
 
   document.querySelectorAll(".answer-button").forEach(button => {
@@ -805,12 +1038,11 @@ function chooseAnswer(index) {
     customer.done = true;
 
     $("dialog").classList.add("hidden");
+
     activeCustomer = null;
 
     replaceCustomer(customer);
 
-    // 여기서는 requestPointer()를 호출하지 않음.
-    // 사용자가 게임 화면을 클릭하면 다시 잠금.
     showToast("게임 화면을 클릭하면 다시 이동할 수 있습니다.");
   });
 
@@ -819,6 +1051,7 @@ function chooseAnswer(index) {
 
 $("close-dialog").addEventListener("click", () => {
   $("dialog").classList.add("hidden");
+
   activeCustomer = null;
 
   showToast("게임 화면을 클릭하면 다시 이동할 수 있습니다.");
@@ -849,7 +1082,10 @@ document.querySelectorAll(".computer-tabs button").forEach(button => {
     currentTab = button.dataset.tab;
 
     document.querySelectorAll(".computer-tabs button").forEach(tab => {
-      tab.classList.toggle("active", tab.dataset.tab === currentTab);
+      tab.classList.toggle(
+        "active",
+        tab.dataset.tab === currentTab
+      );
     });
 
     renderComputer();
@@ -1008,9 +1244,14 @@ function renderComputer() {
   content.innerHTML = forms[currentTab];
 
   $("submit-work").addEventListener("click", () => {
-    const name = $("work-name")?.value.trim() || "고객";
-    const amount = Number($("work-amount")?.value || 0);
-    const product = $("work-product")?.value || "금융 업무";
+    const name =
+      $("work-name")?.value.trim() || "고객";
+
+    const amount =
+      Number($("work-amount")?.value || 0);
+
+    const product =
+      $("work-product")?.value || "금융 업무";
 
     if (currentTab === "deposit" && amount <= 0) {
       showToast("예치 금액을 입력해 주세요.");
@@ -1029,9 +1270,12 @@ function renderComputer() {
     }
 
     satisfaction = Math.min(100, satisfaction + 1);
+
     updateHUD();
 
-    showToast(`${name} 고객 ${product} 업무가 등록되었습니다.`);
+    showToast(
+      `${name} 고객 ${product} 업무가 등록되었습니다.`
+    );
 
     content.innerHTML = `
       <div class="computer-description">
@@ -1064,7 +1308,6 @@ function escapeHTML(value) {
    10. 마우스 포인터 잠금
 ========================================= */
 
-// 수정: 포인터 잠금 실패를 처리하고 자동 재요청하지 않음
 function requestPointer() {
   if (!$("start-screen").classList.contains("hidden")) return;
   if (!$("dialog").classList.contains("hidden")) return;
@@ -1084,25 +1327,28 @@ function requestPointer() {
   }
 }
 
-// 게임 시작 버튼
 $("start-button").addEventListener("click", () => {
   $("start-screen").classList.add("hidden");
+
   requestPointer();
+
   showToast("근화지점 영업을 시작합니다.");
 });
 
-// 게임 화면 클릭으로 시점 조작 재개
 renderer.domElement.addEventListener("click", () => {
   requestPointer();
 });
 
 document.addEventListener("pointerlockchange", () => {
-  pointerLocked = document.pointerLockElement === renderer.domElement;
+  pointerLocked =
+    document.pointerLockElement === renderer.domElement;
 
-  if (!pointerLocked &&
-      $("start-screen").classList.contains("hidden") &&
-      $("dialog").classList.contains("hidden") &&
-      $("computer").classList.contains("hidden")) {
+  if (
+    !pointerLocked &&
+    $("start-screen").classList.contains("hidden") &&
+    $("dialog").classList.contains("hidden") &&
+    $("computer").classList.contains("hidden")
+  ) {
     $("interaction-hint").textContent =
       "게임 화면을 클릭하면 다시 시점 조작을 할 수 있습니다.";
   }
@@ -1150,6 +1396,7 @@ function movePlayer(delta) {
 
   if (direction.lengthSq() > 0) {
     direction.normalize();
+
     direction.applyAxisAngle(
       new THREE.Vector3(0, 1, 0),
       yaw
@@ -1159,8 +1406,18 @@ function movePlayer(delta) {
     camera.position.z += direction.z * speed * delta;
   }
 
-  camera.position.x = THREE.MathUtils.clamp(camera.position.x, -9, 9);
-  camera.position.z = THREE.MathUtils.clamp(camera.position.z, -8.8, 9);
+  camera.position.x = THREE.MathUtils.clamp(
+    camera.position.x,
+    -9,
+    9
+  );
+
+  camera.position.z = THREE.MathUtils.clamp(
+    camera.position.z,
+    -8.8,
+    9
+  );
+
   camera.position.y = 1.65;
 }
 
@@ -1177,7 +1434,9 @@ function interact() {
   for (const customer of customers) {
     if (!customer.mesh || customer.done) continue;
 
-    const distance = camera.position.distanceTo(customer.mesh.position);
+    const distance = camera.position.distanceTo(
+      customer.mesh.position
+    );
 
     if (distance < nearestDistance) {
       nearestDistance = distance;
@@ -1190,8 +1449,14 @@ function interact() {
     return;
   }
 
-  const terminalPosition = new THREE.Vector3(7.2, 1.4, 2.0);
-  const terminalDistance = camera.position.distanceTo(terminalPosition);
+  const terminalPosition = new THREE.Vector3(
+    7.2,
+    1.4,
+    2.0
+  );
+
+  const terminalDistance =
+    camera.position.distanceTo(terminalPosition);
 
   if (terminalDistance < 3.2) {
     openComputer();
@@ -1207,14 +1472,19 @@ function interact() {
 
 function updateHUD() {
   $("day").textContent = day + "일차";
-  $("sales").textContent = sales.toLocaleString("ko-KR") + "원";
-  $("satisfaction").textContent = satisfaction + "%";
+
+  $("sales").textContent =
+    sales.toLocaleString("ko-KR") + "원";
+
+  $("satisfaction").textContent =
+    satisfaction + "%";
 
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
 
   $("clock").textContent =
-    String(h).padStart(2, "0") + ":" +
+    String(h).padStart(2, "0") +
+    ":" +
     String(m).padStart(2, "0");
 }
 
@@ -1227,7 +1497,9 @@ function advanceTime(delta) {
     minutes = 9 * 60;
     day++;
 
-    showToast("영업일이 변경되었습니다. 새로운 하루를 시작합니다.");
+    showToast(
+      "영업일이 변경되었습니다. 새로운 하루를 시작합니다."
+    );
   }
 
   updateHUD();
@@ -1246,7 +1518,9 @@ function updateInteractionHint() {
   for (const customer of customers) {
     if (!customer.mesh || customer.done) continue;
 
-    const distance = camera.position.distanceTo(customer.mesh.position);
+    const distance = camera.position.distanceTo(
+      customer.mesh.position
+    );
 
     if (distance < nearestDistance) {
       nearestDistance = distance;
@@ -1325,11 +1599,19 @@ function animate() {
 ========================================= */
 
 window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.aspect =
+    window.innerWidth / window.innerHeight;
+
   camera.updateProjectionMatrix();
 
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+  );
+
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, 2)
+  );
 });
 
 /* =========================================
@@ -1337,6 +1619,9 @@ window.addEventListener("resize", () => {
 ========================================= */
 
 createRoom();
+
 spawnCustomers();
+
 updateHUD();
+
 animate();
