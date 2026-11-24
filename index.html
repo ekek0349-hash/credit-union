@@ -1,205 +1,82 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>춘천신협 금융창구 시뮬레이터</title>
-  <link rel="stylesheet" href="style.css">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-      background: #172536;
-      color: white;
-    }
-    #game {
-      position: fixed;
-      inset: 0;
-    }
-    #game canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-    #hud {
-      position: fixed;
-      top: 15px;
-      left: 15px;
-      z-index: 5;
-      background: rgba(10, 25, 40, .85);
-      padding: 14px 18px;
-      border-radius: 12px;
-      line-height: 1.8;
-    }
-    #bottomPrompt {
-      position: fixed;
-      bottom: 22px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 5;
-      background: rgba(0,0,0,.7);
-      padding: 12px 22px;
-      border-radius: 10px;
-      text-align: center;
-      width: max-content;
-      max-width: 90%;
-    }
-    #hint {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: rgba(0,0,0,.72);
-      text-align: center;
-      cursor: pointer;
-    }
-    #hint > div {
-      padding: 28px;
-      background: #173e5c;
-      border-radius: 16px;
-    }
-    .hidden { display: none !important; }
-    #interaction, #computer {
-      position: fixed;
-      z-index: 20;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: min(650px, 92vw);
-      max-height: 85vh;
-      overflow: auto;
-      background: #f8fafc;
-      color: #182b3d;
-      padding: 24px;
-      border-radius: 16px;
-      box-shadow: 0 15px 50px #0008;
-    }
-    #interactionTitle, #computer h2 {
-      margin-top: 0;
-    }
-    #interactionChoices {
-      display: grid;
-      gap: 10px;
-      margin-top: 18px;
-    }
-    button {
-      cursor: pointer;
-      border: 0;
-      border-radius: 8px;
-      padding: 12px;
-      background: #174b70;
-      color: white;
-      font-size: 15px;
-    }
-    button:hover { background: #246b98; }
-    .choice { text-align: left; }
-    .tab { margin: 3px; }
-    .tab.active { background: #bd813e; }
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .field { display: grid; gap: 5px; }
-    .field input, .field select {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #bdc7d1;
-      border-radius: 6px;
-    }
-    .form-actions { margin-top: 18px; }
-    .result-box {
-      margin-top: 16px;
-      padding: 15px;
-      background: #e5edf4;
-      border-radius: 8px;
-      line-height: 1.8;
-    }
-    #closeInteraction, #closeComputer {
-      float: right;
-      background: #7b3434;
-    }
-    #toast {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 40;
-      background: #172536;
-      padding: 12px 18px;
-      border-radius: 8px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity .2s;
-    }
-    #toast.show { opacity: 1; }
-    @media(max-width: 600px) {
-      .form-grid { grid-template-columns: 1fr; }
-    }
-  </style>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+  <div id="game">
+    <div id="hud">
+      <div class="branch-name">춘천신협 <span>근화지점</span></div>
+      <div class="hud-info">
+        <div>영업일 <strong id="day">1일차</strong></div>
+        <div>시각 <strong id="clock">09:00</strong></div>
+        <div>실적 <strong id="sales">0원</strong></div>
+        <div>고객 만족도 <strong id="satisfaction">100%</strong></div>
+      </div>
+    </div>
 
-  <div id="game"></div>
+    <div id="crosshair">+</div>
 
-  <div id="hud">
-    <div>춘천신협 근화지점</div>
-    <div>영업일: <span id="day">1</span>일차</div>
-    <div>시간: <span id="clock">09:00</span></div>
-    <div>실적: <span id="sales">0</span>만원</div>
-    <div>고객 만족도: <span id="satisfaction">80</span></div>
-  </div>
+    <div id="help">
+      <span>W A S D</span> 이동
+      <span>마우스</span> 시점 조작
+      <span>E</span> 상호작용
+      <span>SHIFT</span> 달리기
+    </div>
 
-  <div id="bottomPrompt">
-    주변을 둘러보세요. 창구와 전산 책상에서 E 키를 누를 수 있습니다.
-  </div>
+    <div id="interaction-hint">고객이나 업무 기기에 가까이 다가가세요.</div>
 
-  <div id="hint">
-    <div>
-      <h2>춘천신협 금융창구 시뮬레이터</h2>
-      <p>화면을 클릭해 마우스를 잠그고 이동하세요.</p>
-      <p>WASD 이동 · 마우스 시점 변경 · E 상호작용</p>
-      <p>Shift 달리기</p>
-      <button>게임 시작</button>
+    <div id="dialog" class="panel hidden">
+      <div class="panel-top">
+        <div>
+          <small>고객 상담</small>
+          <h2 id="customer-name">고객 이름</h2>
+        </div>
+        <button id="close-dialog" class="close-button">✕</button>
+      </div>
+      <div id="customer-profile"></div>
+      <div id="customer-message"></div>
+      <div id="answer-list"></div>
+      <div id="dialog-feedback"></div>
+    </div>
+
+    <div id="computer" class="panel hidden">
+      <div class="panel-top">
+        <div>
+          <small>CHUNCHEON CREDIT UNION</small>
+          <h2>금융업무 전산 시스템</h2>
+        </div>
+        <button id="close-computer" class="close-button">✕</button>
+      </div>
+      <div class="computer-tabs">
+        <button data-tab="deposit" class="active">수신 업무</button>
+        <button data-tab="loan">여신 업무</button>
+        <button data-tab="insurance">공제 업무</button>
+        <button data-tab="member">조합원 업무</button>
+      </div>
+      <div id="computer-content"></div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="start-screen">
+      <div class="start-card">
+        <div class="start-logo">CU</div>
+        <h1>춘천신협 금융창구 시뮬레이터</h1>
+        <p>근화지점의 금융 업무를 직접 경험해 보세요.</p>
+        <div class="start-guide">
+          <p>WASD : 이동</p>
+          <p>마우스 : 시점 조작</p>
+          <p>E : 고객 상담 및 업무 시작</p>
+          <p>SHIFT : 달리기</p>
+        </div>
+        <button id="start-button">영업 시작하기</button>
+      </div>
     </div>
   </div>
-
-  <div id="interaction" class="hidden">
-    <button id="closeInteraction">닫기</button>
-    <p id="interactionTag"></p>
-    <h2 id="interactionTitle"></h2>
-    <p id="interactionText"></p>
-    <div id="interactionChoices"></div>
-    <p id="interactionFooter"></p>
-  </div>
-
-  <div id="computer" class="hidden">
-    <button id="closeComputer">닫기</button>
-    <h2>춘천신협 통합 전산</h2>
-    <div>
-      <button class="tab active" data-tab="deposit">예금</button>
-      <button class="tab" data-tab="loan">여신</button>
-      <button class="tab" data-tab="mutual">공제</button>
-      <button class="tab" data-tab="member">조합원</button>
-    </div>
-    <div id="computerContent"></div>
-  </div>
-
-  <div id="toast"></div>
 
   <script type="module" src="./game.js"></script>
-  <script>
-    const hint = document.getElementById('hint');
-    hint.addEventListener('click', () => {
-      if (document.pointerLockElement) return;
-      const canvas = document.querySelector('#game canvas');
-      if (canvas) canvas.click();
-    });
-  </script>
-
 </body>
 </html>
