@@ -1,7 +1,7 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 /* =========================================
-   기본 설정
+   1. 기본 설정
 ========================================= */
 
 const scene = new THREE.Scene();
@@ -31,12 +31,13 @@ document.getElementById("game").prepend(renderer.domElement);
 
 const clock = new THREE.Clock();
 
+const $ = id => document.getElementById(id);
+
 const keys = {};
 let yaw = 0;
 let pitch = 0;
 let pointerLocked = false;
 let activeCustomer = null;
-let computerOpen = false;
 let currentTab = "deposit";
 
 let day = 1;
@@ -46,7 +47,6 @@ let satisfaction = 100;
 let completedCustomers = 0;
 
 const customers = [];
-const desks = [];
 const customerPositions = [
   [-4.2, -1.5],
   [-1.4, -1.5],
@@ -54,50 +54,57 @@ const customerPositions = [
   [4.2, -1.5]
 ];
 
-const $ = id => document.getElementById(id);
-
 const materials = {
   floor: new THREE.MeshStandardMaterial({ color: 0xc7c4ba, roughness: 0.85 }),
   wall: new THREE.MeshStandardMaterial({ color: 0xf1f3f2, roughness: 0.9 }),
-  blue: new THREE.MeshStandardMaterial({ color: 0x174e70, roughness: 0.75 }),
-  wood: new THREE.MeshStandardMaterial({ color: 0x967454, roughness: 0.8 }),
-  darkWood: new THREE.MeshStandardMaterial({ color: 0x60452f, roughness: 0.8 }),
+  blue: new THREE.MeshStandardMaterial({ color: 0x174e70 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0x967454 }),
+  darkWood: new THREE.MeshStandardMaterial({ color: 0x60452f }),
   glass: new THREE.MeshStandardMaterial({
     color: 0x9dcbd7,
     transparent: true,
-    opacity: 0.22,
-    roughness: 0.1
+    opacity: 0.22
   }),
   white: new THREE.MeshStandardMaterial({ color: 0xffffff }),
   black: new THREE.MeshStandardMaterial({ color: 0x20252a }),
-  gold: new THREE.MeshStandardMaterial({ color: 0xc6a45c, metalness: 0.55, roughness: 0.3 })
+  gold: new THREE.MeshStandardMaterial({ color: 0xc6a45c })
 };
 
 function mat(color, roughness = 0.75) {
   return new THREE.MeshStandardMaterial({ color, roughness });
 }
 
+/* =========================================
+   2. 3D 물체 생성 함수
+========================================= */
+
 function box(x, y, z, sx, sy, sz, material, parent = scene) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(sx, sy, sz),
     material
   );
+
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   parent.add(mesh);
+
   return mesh;
 }
 
-function sphere(x, y, z, sx, sy, sz, material, parent) {
+// 수정: parent가 전달되지 않으면 scene에 추가
+function sphere(x, y, z, sx, sy, sz, material, parent = scene) {
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(1, 20, 16),
     material
   );
+
   mesh.position.set(x, y, z);
   mesh.scale.set(sx, sy, sz);
   mesh.castShadow = true;
+  mesh.receiveShadow = true;
   parent.add(mesh);
+
   return mesh;
 }
 
@@ -106,14 +113,17 @@ function cylinder(x, y, z, rt, rb, h, material, parent = scene) {
     new THREE.CylinderGeometry(rt, rb, h, 20),
     material
   );
+
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
+  mesh.receiveShadow = true;
   parent.add(mesh);
+
   return mesh;
 }
 
 /* =========================================
-   조명
+   3. 조명
 ========================================= */
 
 scene.add(new THREE.HemisphereLight(0xe9f5ff, 0x7c7161, 2));
@@ -133,24 +143,50 @@ ceilingLight2.position.set(4, 4.5, 0);
 scene.add(ceilingLight2);
 
 /* =========================================
-   영업점 내부 제작
+   4. 영업점 내부
 ========================================= */
 
-function createRoom() {
-  // 바닥
-  box(0, -0.15, 0, 20, 0.3, 20, materials.floor);
+function addTextSign(text, x, y, z, size = 0.3) {
+  return box(
+    x, y, z,
+    Math.max(0.6, text.length * size * 0.8),
+    size * 1.2,
+    0.04,
+    materials.blue
+  );
+}
 
-  // 벽
+function createPlant(x, y, z) {
+  cylinder(x, y + 0.35, z, 0.35, 0.25, 0.7, mat(0x9a6848));
+
+  for (let i = 0; i < 6; i++) {
+    const leaf = sphere(
+      x + Math.sin(i) * 0.28,
+      y + 1.1 + Math.cos(i * 2) * 0.12,
+      z + Math.cos(i) * 0.25,
+      0.22,
+      0.55,
+      0.18,
+      mat(0x347d4a)
+    );
+
+    leaf.rotation.z = Math.sin(i) * 0.4;
+  }
+}
+
+function createRoom() {
+  // 바닥과 벽
+  box(0, -0.15, 0, 20, 0.3, 20, materials.floor);
   box(0, 3, -10, 20, 6, 0.3, materials.wall);
   box(-10, 3, 0, 0.3, 6, 20, materials.wall);
   box(10, 3, 0, 0.3, 6, 20, materials.wall);
   box(0, 5.8, 0, 20, 0.2, 20, materials.white);
 
-  // 뒤쪽 로고 벽
+  // 신협 로고 벽
   box(0, 3.7, -9.78, 7, 1.3, 0.08, materials.blue);
   addTextSign("춘천신협", 0, 3.7, -9.68, 0.7);
 
-  // 창구 카운터
+  // 창구
   for (let i = 0; i < 4; i++) {
     const x = customerPositions[i][0];
 
@@ -168,8 +204,6 @@ function createRoom() {
     // 창구 번호
     box(x, 2.2, -0.1, 0.65, 0.32, 0.12, materials.blue);
     addTextSign(String(i + 1) + "번 창구", x, 2.2, -0.02, 0.18);
-
-    desks.push({ x, z: 0.1 });
   }
 
   // 고객 대기 의자
@@ -190,7 +224,7 @@ function createRoom() {
   box(-8.5, 0.95, -3.42, 0.45, 0.2, 0.04, materials.black);
   addTextSign("ATM", -8.5, 2.9, -3.3, 0.3);
 
-  // 상담실
+  // 상담실 유리벽
   box(7.4, 1.2, -5.5, 3.4, 2.4, 0.12, materials.glass);
   box(7.4, 2.5, -5.5, 3.4, 0.08, 0.12, materials.blue);
   box(7.4, 0.05, -5.5, 3.4, 0.08, 0.12, materials.blue);
@@ -213,30 +247,8 @@ function createRoom() {
   addTextSign("업무 전산", 7.2, 2.1, 1.85, 0.22);
 }
 
-function addTextSign(text, x, y, z, size = 0.3) {
-  // 별도 글꼴 로딩 없이 간단한 입체 표식으로 대체
-  const sign = box(x, y, z, Math.max(0.6, text.length * size * 0.8), size * 1.2, 0.04, materials.blue);
-  return sign;
-}
-
-function createPlant(x, y, z) {
-  cylinder(x, y + 0.35, z, 0.35, 0.25, 0.7, mat(0x9a6848));
-  for (let i = 0; i < 6; i++) {
-    const leaf = sphere(
-      x + Math.sin(i) * 0.28,
-      y + 1.1 + Math.cos(i * 2) * 0.12,
-      z + Math.cos(i) * 0.25,
-      0.22,
-      0.55,
-      0.18,
-      mat(0x347d4a)
-    );
-    leaf.rotation.z = Math.sin(i) * 0.4;
-  }
-}
-
 /* =========================================
-   고객 데이터
+   5. 고객 데이터
 ========================================= */
 
 const firstNames = [
@@ -509,22 +521,18 @@ function createCustomerData() {
 }
 
 /* =========================================
-   심즈풍 고객 캐릭터 제작
+   6. 심즈풍 캐릭터
 ========================================= */
 
 function createHuman(customer, x, z) {
   const group = new THREE.Group();
 
-  const skinColors = [0xf1c7a5, 0xe5b58f, 0xd8a47f, 0xf4d2b4];
-  const hairColors = [0x201812, 0x493020, 0x171717, 0x786044, 0x29212a];
-  const clothesColors = [
+  const skin = mat(randomItem([0xf1c7a5, 0xe5b58f, 0xd8a47f, 0xf4d2b4]));
+  const hair = mat(randomItem([0x201812, 0x493020, 0x171717, 0x786044, 0x29212a]));
+  const clothes = mat(randomItem([
     0x345d7d, 0x725b83, 0x456b58, 0x9b5f54,
     0x333f50, 0x9a825b, 0x526f86, 0x704e3e
-  ];
-
-  const skin = mat(randomItem(skinColors));
-  const hair = mat(randomItem(hairColors));
-  const clothes = mat(randomItem(clothesColors));
+  ]));
   const pants = mat(randomItem([0x293747, 0x454545, 0x263c35, 0x655b50]));
   const shoes = mat(0x252525);
   const eyeWhite = mat(0xffffff);
@@ -536,61 +544,61 @@ function createHuman(customer, x, z) {
     new THREE.CapsuleGeometry(0.34, 0.65, 5, 12),
     clothes
   );
+
   torso.position.y = 1.25;
   torso.scale.set(1, 1.05, 0.7);
   torso.castShadow = true;
   group.add(torso);
 
-  // 목
+  // 목과 얼굴
   cylinder(0, 1.83, 0, 0.11, 0.12, 0.22, skin, group);
-
-  // 얼굴
   sphere(0, 2.15, 0.03, 0.35, 0.43, 0.31, skin, group);
 
   // 귀
   sphere(-0.35, 2.15, 0.02, 0.09, 0.14, 0.07, skin, group);
   sphere(0.35, 2.15, 0.02, 0.09, 0.14, 0.07, skin, group);
 
-  // 눈
+  // 눈과 눈썹
   for (const side of [-1, 1]) {
     sphere(side * 0.13, 2.22, 0.31, 0.075, 0.09, 0.045, eyeWhite, group);
     sphere(side * 0.13, 2.22, 0.35, 0.035, 0.05, 0.025, iris, group);
     sphere(side * 0.13, 2.24, 0.37, 0.014, 0.018, 0.012, eyeWhite, group);
 
-    const brow = box(side * 0.13, 2.34, 0.31, 0.13, 0.025, 0.035, hair, group);
+    const brow = box(
+      side * 0.13, 2.34, 0.31,
+      0.13, 0.025, 0.035,
+      hair, group
+    );
+
     brow.rotation.z = side * -0.08;
   }
 
-  // 코
+  // 코와 입
   sphere(0, 2.12, 0.34, 0.055, 0.09, 0.07, skin, group);
-
-  // 입
   sphere(0, 2.0, 0.31, 0.09, 0.025, 0.025, mat(0x9f5958), group);
 
   // 머리카락
   sphere(0, 2.48, 0, 0.36, 0.2, 0.33, hair, group);
   sphere(0, 2.36, -0.19, 0.34, 0.28, 0.13, hair, group);
 
-  // 앞머리
   for (let i = 0; i < 3; i++) {
     sphere(
       -0.16 + i * 0.16,
       2.43 - Math.abs(i - 1) * 0.04,
       0.25,
-      0.11,
-      0.12,
-      0.1,
+      0.11, 0.12, 0.1,
       hair,
       group
     );
   }
 
-  // 팔
+  // 팔과 손
   for (const side of [-1, 1]) {
     const arm = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.095, 0.52, 4, 8),
       clothes
     );
+
     arm.position.set(side * 0.39, 1.32, 0);
     arm.rotation.z = side * -0.13;
     arm.castShadow = true;
@@ -598,27 +606,25 @@ function createHuman(customer, x, z) {
 
     sphere(side * 0.4, 0.99, 0.03, 0.11, 0.13, 0.11, skin, group);
 
-    // 손가락
     for (let f = 0; f < 4; f++) {
       sphere(
         side * 0.4 + (f - 1.5) * 0.035,
         0.91,
         0.05,
-        0.025,
-        0.07,
-        0.025,
+        0.025, 0.07, 0.025,
         skin,
         group
       );
     }
   }
 
-  // 바지
+  // 다리와 신발
   for (const side of [-1, 1]) {
     const leg = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.13, 0.52, 4, 8),
       pants
     );
+
     leg.position.set(side * 0.15, 0.47, 0);
     leg.castShadow = true;
     group.add(leg);
@@ -626,7 +632,7 @@ function createHuman(customer, x, z) {
     sphere(side * 0.15, 0.12, 0.09, 0.15, 0.09, 0.27, shoes, group);
   }
 
-  // 여성 캐릭터의 긴 머리 스타일
+  // 여성 긴 머리
   if (customer.gender === "여성" && Math.random() > 0.35) {
     sphere(-0.3, 2.17, -0.1, 0.12, 0.38, 0.16, hair, group);
     sphere(0.3, 2.17, -0.1, 0.12, 0.38, 0.16, hair, group);
@@ -639,6 +645,7 @@ function createHuman(customer, x, z) {
         new THREE.TorusGeometry(0.09, 0.012, 8, 20),
         dark
       );
+
       ring.position.set(side * 0.13, 2.22, 0.36);
       group.add(ring);
     }
@@ -651,7 +658,7 @@ function createHuman(customer, x, z) {
     sphere(0, 1.45 - i * 0.14, 0.235, 0.025, 0.025, 0.02, materials.gold, group);
   }
 
-  // 그림자
+  // 발밑 그림자
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.45, 24),
     new THREE.MeshBasicMaterial({
@@ -660,6 +667,7 @@ function createHuman(customer, x, z) {
       opacity: 0.15
     })
   );
+
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.015;
   group.add(shadow);
@@ -675,7 +683,7 @@ function createHuman(customer, x, z) {
 }
 
 /* =========================================
-   고객 생성 및 대기 관리
+   7. 고객 배치
 ========================================= */
 
 function spawnCustomers() {
@@ -697,17 +705,19 @@ function replaceCustomer(oldCustomer) {
 
   const index = oldCustomer.positionIndex;
   const customer = createCustomerData();
+
   customer.positionIndex = index;
 
   const [x, z] = customerPositions[index];
   createHuman(customer, x, z);
 
   customers[index] = customer;
+
   showToast("새로운 고객이 방문했습니다.");
 }
 
 /* =========================================
-   상담 화면
+   8. 고객 상담
 ========================================= */
 
 function openCustomer(customer) {
@@ -728,20 +738,27 @@ function openCustomer(customer) {
 
   $("customer-message").textContent = customer.scenario.message;
   $("dialog-feedback").textContent = "";
+  $("dialog-feedback").style.color = "#176d48";
 
   const answerList = $("answer-list");
   answerList.innerHTML = "";
 
   customer.scenario.options.forEach((option, index) => {
     const button = document.createElement("button");
+
     button.className = "answer-button";
     button.textContent = `${index + 1}. ${option}`;
     button.addEventListener("click", () => chooseAnswer(index));
+
     answerList.appendChild(button);
   });
 
   $("dialog").classList.remove("hidden");
-  document.exitPointerLock();
+
+  // 상담창을 열 때 포인터 잠금 해제
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
 }
 
 function chooseAnswer(index) {
@@ -753,35 +770,48 @@ function chooseAnswer(index) {
   if (correct) {
     satisfaction = Math.min(100, satisfaction + 2);
     sales += customer.scenario.reward;
+
     $("dialog-feedback").textContent =
       "상담이 완료되었습니다. " + customer.scenario.feedback;
+
+    $("dialog-feedback").style.color = "#176d48";
+
     showToast("올바른 상담입니다. 실적이 반영되었습니다.");
   } else {
     satisfaction = Math.max(0, satisfaction - 8);
-    $("dialog-feedback").style.color = "#c04444";
+
     $("dialog-feedback").textContent =
       "아쉬운 상담입니다. 고객 상황과 금융상품의 조건을 다시 확인해 보세요.";
+
+    $("dialog-feedback").style.color = "#c04444";
+
     showToast("상담 점수가 하락했습니다.");
   }
 
   completedCustomers++;
   updateHUD();
 
-  const answerButtons = document.querySelectorAll(".answer-button");
-  answerButtons.forEach(button => {
+  document.querySelectorAll(".answer-button").forEach(button => {
     button.disabled = true;
     button.style.opacity = "0.55";
   });
 
   const finishButton = document.createElement("button");
+
   finishButton.className = "primary-button";
   finishButton.textContent = "상담 종료";
+
   finishButton.addEventListener("click", () => {
     customer.done = true;
+
     $("dialog").classList.add("hidden");
     activeCustomer = null;
+
     replaceCustomer(customer);
-    requestPointer();
+
+    // 여기서는 requestPointer()를 호출하지 않음.
+    // 사용자가 게임 화면을 클릭하면 다시 잠금.
+    showToast("게임 화면을 클릭하면 다시 이동할 수 있습니다.");
   });
 
   $("answer-list").appendChild(finishButton);
@@ -790,24 +820,28 @@ function chooseAnswer(index) {
 $("close-dialog").addEventListener("click", () => {
   $("dialog").classList.add("hidden");
   activeCustomer = null;
-  requestPointer();
+
+  showToast("게임 화면을 클릭하면 다시 이동할 수 있습니다.");
 });
 
 /* =========================================
-   전산 업무 화면
+   9. 전산 업무
 ========================================= */
 
 function openComputer() {
-  computerOpen = true;
   $("computer").classList.remove("hidden");
-  document.exitPointerLock();
+
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
+
   renderComputer();
 }
 
 $("close-computer").addEventListener("click", () => {
-  computerOpen = false;
   $("computer").classList.add("hidden");
-  requestPointer();
+
+  showToast("게임 화면을 클릭하면 다시 이동할 수 있습니다.");
 });
 
 document.querySelectorAll(".computer-tabs button").forEach(button => {
@@ -828,16 +862,19 @@ function renderComputer() {
   const forms = {
     deposit: `
       <div class="computer-description">
-        정기예금 신규 및 재예치 업무입니다. 고객의 예치 금액과 기간, 적용 가능한 세제 혜택을 확인하세요.
+        정기예금 신규 및 재예치 업무입니다. 예치 금액과 기간, 적용 가능한 세제 혜택을 확인하세요.
       </div>
+
       <div class="form-row">
         <label>고객명</label>
         <input id="work-name" placeholder="고객 이름 입력">
       </div>
+
       <div class="form-row">
         <label>예치 금액</label>
         <input id="work-amount" type="number" placeholder="예: 30000000">
       </div>
+
       <div class="form-row">
         <label>상품 선택</label>
         <select id="work-product">
@@ -847,6 +884,7 @@ function renderComputer() {
           <option>출자금</option>
         </select>
       </div>
+
       <div class="form-row">
         <label>예치 기간</label>
         <select id="work-period">
@@ -857,21 +895,25 @@ function renderComputer() {
           <option>24개월</option>
         </select>
       </div>
+
       <button class="primary-button" id="submit-work">업무 처리</button>
     `,
 
     loan: `
       <div class="computer-description">
-        여신 사전 검토 업무입니다. 담보 및 소득, 신용정보 등을 확인하고 실제 승인 여부는 별도 심사가 필요합니다.
+        여신 사전 검토 업무입니다. 담보와 소득, 신용정보 등을 확인하세요. 실제 승인 여부는 별도 심사가 필요합니다.
       </div>
+
       <div class="form-row">
         <label>고객명</label>
         <input id="work-name" placeholder="고객 이름 입력">
       </div>
+
       <div class="form-row">
         <label>희망 대출 금액</label>
         <input id="work-amount" type="number" placeholder="예: 50000000">
       </div>
+
       <div class="form-row">
         <label>대출 종류</label>
         <select id="work-product">
@@ -882,6 +924,7 @@ function renderComputer() {
           <option>신용대출</option>
         </select>
       </div>
+
       <div class="form-row">
         <label>소득 확인</label>
         <select id="work-period">
@@ -890,6 +933,7 @@ function renderComputer() {
           <option>소득 확인 불가</option>
         </select>
       </div>
+
       <button class="primary-button" id="submit-work">사전 검토 등록</button>
     `,
 
@@ -897,10 +941,12 @@ function renderComputer() {
       <div class="computer-description">
         공제 상담 기록 업무입니다. 고객의 기존 보험과 필요한 보장 내용을 확인하세요.
       </div>
+
       <div class="form-row">
         <label>고객명</label>
         <input id="work-name" placeholder="고객 이름 입력">
       </div>
+
       <div class="form-row">
         <label>상담 상품</label>
         <select id="work-product">
@@ -910,6 +956,7 @@ function renderComputer() {
           <option>상해공제</option>
         </select>
       </div>
+
       <div class="form-row">
         <label>상담 내용</label>
         <select id="work-period">
@@ -919,6 +966,7 @@ function renderComputer() {
           <option>만기 및 갱신 상담</option>
         </select>
       </div>
+
       <button class="primary-button" id="submit-work">상담 기록 등록</button>
     `,
 
@@ -926,10 +974,12 @@ function renderComputer() {
       <div class="computer-description">
         조합원 및 전자금융 서비스 업무입니다. 가입 조건과 본인확인 절차를 확인하세요.
       </div>
+
       <div class="form-row">
         <label>고객명</label>
         <input id="work-name" placeholder="고객 이름 입력">
       </div>
+
       <div class="form-row">
         <label>업무 종류</label>
         <select id="work-product">
@@ -941,6 +991,7 @@ function renderComputer() {
           <option>체크카드 발급</option>
         </select>
       </div>
+
       <div class="form-row">
         <label>처리 상태</label>
         <select id="work-period">
@@ -949,6 +1000,7 @@ function renderComputer() {
           <option>추가 서류 필요</option>
         </select>
       </div>
+
       <button class="primary-button" id="submit-work">업무 처리</button>
     `
   };
@@ -970,9 +1022,7 @@ function renderComputer() {
       return;
     }
 
-    if (currentTab === "deposit") {
-      sales += amount;
-    } else if (currentTab === "loan") {
+    if (currentTab === "deposit" || currentTab === "loan") {
       sales += amount;
     } else {
       sales += 100000;
@@ -982,6 +1032,7 @@ function renderComputer() {
     updateHUD();
 
     showToast(`${name} 고객 ${product} 업무가 등록되었습니다.`);
+
     content.innerHTML = `
       <div class="computer-description">
         <h3>업무 처리가 완료되었습니다.</h3>
@@ -989,7 +1040,10 @@ function renderComputer() {
         <p>업무 종류: ${escapeHTML(product)}</p>
         <p>등록 실적이 반영되었습니다.</p>
       </div>
-      <button class="primary-button" id="back-work">다른 업무 처리하기</button>
+
+      <button class="primary-button" id="back-work">
+        다른 업무 처리하기
+      </button>
     `;
 
     $("back-work").addEventListener("click", renderComputer);
@@ -1007,32 +1061,51 @@ function escapeHTML(value) {
 }
 
 /* =========================================
-   플레이어 이동 및 상호작용
+   10. 마우스 포인터 잠금
 ========================================= */
 
+// 수정: 포인터 잠금 실패를 처리하고 자동 재요청하지 않음
 function requestPointer() {
+  if (!$("start-screen").classList.contains("hidden")) return;
   if (!$("dialog").classList.contains("hidden")) return;
   if (!$("computer").classList.contains("hidden")) return;
+  if (document.pointerLockElement) return;
 
-  renderer.domElement.requestPointerLock?.();
+  try {
+    const result = renderer.domElement.requestPointerLock();
+
+    if (result && typeof result.catch === "function") {
+      result.catch(() => {
+        showToast("게임 화면을 다시 클릭해 주세요.");
+      });
+    }
+  } catch (error) {
+    showToast("게임 화면을 다시 클릭해 주세요.");
+  }
 }
 
+// 게임 시작 버튼
 $("start-button").addEventListener("click", () => {
   $("start-screen").classList.add("hidden");
   requestPointer();
   showToast("근화지점 영업을 시작합니다.");
 });
 
+// 게임 화면 클릭으로 시점 조작 재개
 renderer.domElement.addEventListener("click", () => {
-  if ($("start-screen").classList.contains("hidden") &&
-      $("dialog").classList.contains("hidden") &&
-      $("computer").classList.contains("hidden")) {
-    requestPointer();
-  }
+  requestPointer();
 });
 
 document.addEventListener("pointerlockchange", () => {
   pointerLocked = document.pointerLockElement === renderer.domElement;
+
+  if (!pointerLocked &&
+      $("start-screen").classList.contains("hidden") &&
+      $("dialog").classList.contains("hidden") &&
+      $("computer").classList.contains("hidden")) {
+    $("interaction-hint").textContent =
+      "게임 화면을 클릭하면 다시 시점 조작을 할 수 있습니다.";
+  }
 });
 
 document.addEventListener("mousemove", event => {
@@ -1045,6 +1118,10 @@ document.addEventListener("mousemove", event => {
 
   camera.rotation.set(pitch, yaw, 0);
 });
+
+/* =========================================
+   11. 키보드 및 이동
+========================================= */
 
 document.addEventListener("keydown", event => {
   keys[event.code] = true;
@@ -1061,7 +1138,9 @@ document.addEventListener("keyup", event => {
 function movePlayer(delta) {
   if (!pointerLocked) return;
 
-  const speed = keys.ShiftLeft || keys.ShiftRight ? 7 : 4;
+  const speed =
+    keys.ShiftLeft || keys.ShiftRight ? 7 : 4;
+
   const direction = new THREE.Vector3();
 
   if (keys.KeyW) direction.z -= 1;
@@ -1071,7 +1150,10 @@ function movePlayer(delta) {
 
   if (direction.lengthSq() > 0) {
     direction.normalize();
-    direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    direction.applyAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      yaw
+    );
 
     camera.position.x += direction.x * speed * delta;
     camera.position.z += direction.z * speed * delta;
@@ -1081,6 +1163,10 @@ function movePlayer(delta) {
   camera.position.z = THREE.MathUtils.clamp(camera.position.z, -8.8, 9);
   camera.position.y = 1.65;
 }
+
+/* =========================================
+   12. 상호작용
+========================================= */
 
 function interact() {
   if (!pointerLocked) return;
@@ -1116,7 +1202,7 @@ function interact() {
 }
 
 /* =========================================
-   HUD 및 게임 시간
+   13. HUD 및 시간
 ========================================= */
 
 function updateHUD() {
@@ -1140,28 +1226,15 @@ function advanceTime(delta) {
   if (minutes >= 17 * 60) {
     minutes = 9 * 60;
     day++;
+
     showToast("영업일이 변경되었습니다. 새로운 하루를 시작합니다.");
   }
 
   updateHUD();
 }
 
-let toastTimer = null;
-
-function showToast(message) {
-  const toast = $("toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-
-  clearTimeout(toastTimer);
-
-  toastTimer = setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2400);
-}
-
 /* =========================================
-   고객 접근 안내
+   14. 고객 접근 안내
 ========================================= */
 
 function updateInteractionHint() {
@@ -1184,6 +1257,7 @@ function updateInteractionHint() {
   if (nearestCustomer && nearestDistance < 3.3) {
     $("interaction-hint").textContent =
       `E 키를 눌러 ${nearestCustomer.name} 고객 상담하기`;
+
     return;
   }
 
@@ -1192,15 +1266,37 @@ function updateInteractionHint() {
   );
 
   if (terminalDistance < 3.2) {
-    $("interaction-hint").textContent = "E 키를 눌러 전산 업무 시작하기";
+    $("interaction-hint").textContent =
+      "E 키를 눌러 전산 업무 시작하기";
+
     return;
   }
 
-  $("interaction-hint").textContent = "고객이나 전산 기기에 가까이 다가가세요.";
+  $("interaction-hint").textContent =
+    "고객이나 전산 기기에 가까이 다가가세요.";
 }
 
 /* =========================================
-   애니메이션
+   15. 알림 메시지
+========================================= */
+
+let toastTimer = null;
+
+function showToast(message) {
+  const toast = $("toast");
+
+  toast.textContent = message;
+  toast.classList.add("show");
+
+  clearTimeout(toastTimer);
+
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2400);
+}
+
+/* =========================================
+   16. 애니메이션
 ========================================= */
 
 function animate() {
@@ -1212,24 +1308,20 @@ function animate() {
   advanceTime(delta);
   updateInteractionHint();
 
-  // 고객들이 자연스럽게 미세하게 움직이도록 처리
   const elapsed = clock.elapsedTime;
 
   customers.forEach((customer, index) => {
     if (!customer.mesh) return;
 
-    customer.mesh.position.y = Math.sin(elapsed * 1.5 + index) * 0.015;
-
-    if (customer.done) {
-      customer.mesh.rotation.y += delta * 0.5;
-    }
+    customer.mesh.position.y =
+      Math.sin(elapsed * 1.5 + index) * 0.015;
   });
 
   renderer.render(scene, camera);
 }
 
 /* =========================================
-   화면 크기 변경
+   17. 화면 크기 변경
 ========================================= */
 
 window.addEventListener("resize", () => {
@@ -1241,7 +1333,7 @@ window.addEventListener("resize", () => {
 });
 
 /* =========================================
-   게임 시작
+   18. 게임 실행
 ========================================= */
 
 createRoom();
