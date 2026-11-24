@@ -10,59 +10,93 @@
   <header class="topbar">
     <div>
       <h1>🏦 춘천신협</h1>
-      <p>금융창구 시뮬레이션</p>
+      <p>금융창구 실무 시뮬레이션</p>
     </div>
     <div class="stats">
       <span>영업일 <b id="day">1</b>일차</span>
-      <span>실적 <b id="sales">0</b>만원</span>
-      <span>만족도 <b id="satisfaction">80</b></span>
+      <span>누적 실적 <b id="sales">0</b>만원</span>
+      <span>고객 만족도 <b id="satisfaction">80</b></span>
+      <span>직급 <b id="rank">신입 직원</b></span>
     </div>
   </header>
 
   <main class="container">
     <section class="welcome">
-      <h2>오늘도 조합원을 위해 힘차게 시작해 봅시다!</h2>
-      <p>고객을 응대하고 예금, 대출, 공제 업무를 처리해 보세요.</p>
+      <h2>오늘도 조합원을 위한 하루를 시작합니다.</h2>
+      <p>고객의 상황을 파악하고 적합한 금융상품을 안내해 보세요.</p>
     </section>
 
     <section class="dashboard">
       <div class="panel customer-panel">
-        <h2>👤 오늘의 방문 고객</h2>
+        <div class="section-heading">
+          <h2>👤 창구 상담</h2>
+          <span id="customerStatus" class="status">대기 중</span>
+        </div>
+
         <div id="customer">
-          <h3 id="customerName">고객을 기다리는 중입니다.</h3>
-          <p id="customerInfo">아래 버튼을 눌러 영업을 시작하세요.</p>
+          <h3 id="customerName">고객을 기다리고 있습니다.</h3>
+          <p id="customerInfo">영업을 시작해 주세요.</p>
           <p id="customerRequest"></p>
         </div>
-        <div id="dialogue" class="dialogue">
-          고객 응대를 시작해 보세요.
+
+        <div class="conversation">
+          <div class="conversation-title">상담 내용</div>
+          <div id="dialogue" class="dialogue">
+            고객이 방문하면 상담 내용이 이곳에 표시됩니다.
+          </div>
         </div>
+
         <div id="choices" class="choices"></div>
-        <button class="main-btn" id="nextCustomer">다음 고객 응대하기</button>
+
+        <div class="customer-actions">
+          <button class="main-btn" id="nextCustomer">
+            다음 고객 응대하기
+          </button>
+          <button class="sub-btn" id="finishConsult" disabled>
+            상담 마무리
+          </button>
+        </div>
       </div>
 
       <div class="panel">
         <h2>📊 지점 현황</h2>
         <div class="stat-card">
-          <span>누적 예금 실적</span>
+          <span>예금 실적</span>
           <strong id="depositTotal">0만원</strong>
         </div>
         <div class="stat-card">
-          <span>누적 대출 실적</span>
+          <span>대출 실적</span>
           <strong id="loanTotal">0만원</strong>
         </div>
         <div class="stat-card">
-          <span>공제 상담 실적</span>
+          <span>공제 상담</span>
           <strong id="insuranceTotal">0건</strong>
         </div>
         <div class="stat-card">
-          <span>직급</span>
-          <strong id="rank">신입 직원</strong>
+          <span>오늘 응대 고객</span>
+          <strong id="customerCount">0명</strong>
+        </div>
+        <div class="stat-card">
+          <span>상담 숙련도</span>
+          <strong id="skill">1레벨</strong>
+        </div>
+        <div class="stat-card">
+          <span>월간 목표 달성률</span>
+          <strong id="goal">0%</strong>
         </div>
       </div>
     </section>
 
+    <section class="panel">
+      <h2>💬 상담 진행 현황</h2>
+      <div class="progress-track">
+        <div id="consultProgress" class="progress-bar"></div>
+      </div>
+      <p id="consultStep" class="muted">고객 상담을 시작해 주세요.</p>
+    </section>
+
     <section class="work-section">
-      <h2>💼 창구 업무</h2>
+      <h2>💼 금융 업무 메뉴</h2>
       <div class="work-grid">
         <button class="work-btn" onclick="openWork('deposit')">
           💰 예금 업무
@@ -78,27 +112,27 @@
         </button>
         <button class="work-btn" onclick="openWork('record')">
           📒 업무 일지
-          <small>오늘의 업무 및 실적 확인</small>
+          <small>실적 및 상담 기록</small>
         </button>
       </div>
     </section>
 
     <section class="panel work-panel" id="workPanel">
-      <h2>업무를 선택해 주세요.</h2>
-      <p>위 업무 메뉴를 선택하면 해당 업무를 진행할 수 있습니다.</p>
+      <h2>업무 메뉴</h2>
+      <p>원하는 업무를 선택해 주세요.</p>
     </section>
 
     <section class="panel">
-      <h2>📅 하루 마감</h2>
-      <p>오늘의 고객 응대를 마치고 영업을 마감하세요.</p>
-      <button class="main-btn" onclick="endDay()">영업 마감하기</button>
-      <p id="dayResult"></p>
+      <h2>📅 영업 마감</h2>
+      <p>오늘의 업무를 마감하고 다음 영업일로 넘어갑니다.</p>
+      <button class="main-btn" onclick="endDay()">하루 마감하기</button>
+      <div id="dayResult"></div>
     </section>
   </main>
 
   <footer>
-    <p>춘천신협 금융창구 시뮬레이션 · 가상 교육용 게임</p>
-    <p>실제 금융상품의 금리 및 대출 심사 기준과 다를 수 있습니다.</p>
+    <p>춘천신협 금융창구 실무 시뮬레이션</p>
+    <p>가상 교육용 게임이며 실제 금융상품 및 심사 기준과 다를 수 있습니다.</p>
   </footer>
 
   <script src="game.js"></script>
