@@ -1,1 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>춘천신협 금융창구 시뮬레이션</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>🏦 춘천신협</h1>
+      <p>금융창구 시뮬레이션</p>
+    </div>
+    <div class="stats">
+      <span>영업일 <b id="day">1</b>일차</span>
+      <span>실적 <b id="sales">0</b>만원</span>
+      <span>만족도 <b id="satisfaction">80</b></span>
+    </div>
+  </header>
 
+  <main class="container">
+    <section class="welcome">
+      <h2>오늘도 조합원을 위해 힘차게 시작해 봅시다!</h2>
+      <p>고객을 응대하고 예금, 대출, 공제 업무를 처리해 보세요.</p>
+    </section>
+
+    <section class="dashboard">
+      <div class="panel customer-panel">
+        <h2>👤 오늘의 방문 고객</h2>
+        <div id="customer">
+          <h3 id="customerName">고객을 기다리는 중입니다.</h3>
+          <p id="customerInfo">아래 버튼을 눌러 영업을 시작하세요.</p>
+          <p id="customerRequest"></p>
+        </div>
+        <div id="dialogue" class="dialogue">
+          고객 응대를 시작해 보세요.
+        </div>
+        <div id="choices" class="choices"></div>
+        <button class="main-btn" id="nextCustomer">다음 고객 응대하기</button>
+      </div>
+
+      <div class="panel">
+        <h2>📊 지점 현황</h2>
+        <div class="stat-card">
+          <span>누적 예금 실적</span>
+          <strong id="depositTotal">0만원</strong>
+        </div>
+        <div class="stat-card">
+          <span>누적 대출 실적</span>
+          <strong id="loanTotal">0만원</strong>
+        </div>
+        <div class="stat-card">
+          <span>공제 상담 실적</span>
+          <strong id="insuranceTotal">0건</strong>
+        </div>
+        <div class="stat-card">
+          <span>직급</span>
+          <strong id="rank">신입 직원</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="work-section">
+      <h2>💼 창구 업무</h2>
+      <div class="work-grid">
+        <button class="work-btn" onclick="openWork('deposit')">
+          💰 예금 업무
+          <small>정기예금 · 적금 · 출자금</small>
+        </button>
+        <button class="work-btn" onclick="openWork('loan')">
+          🏠 대출 업무
+          <small>담보대출 · 햇살론 · 전세대출</small>
+        </button>
+        <button class="work-btn" onclick="openWork('insurance')">
+          🛡️ 공제 업무
+          <small>화재 · 운전자 · 간병</small>
+        </button>
+        <button class="work-btn" onclick="openWork('record')">
+          📒 업무 일지
+          <small>오늘의 업무 및 실적 확인</small>
+        </button>
+      </div>
+    </section>
+
+    <section class="panel work-panel" id="workPanel">
+      <h2>업무를 선택해 주세요.</h2>
+      <p>위 업무 메뉴를 선택하면 해당 업무를 진행할 수 있습니다.</p>
+    </section>
+
+    <section class="panel">
+      <h2>📅 하루 마감</h2>
+      <p>오늘의 고객 응대를 마치고 영업을 마감하세요.</p>
+      <button class="main-btn" onclick="endDay()">영업 마감하기</button>
+      <p id="dayResult"></p>
+    </section>
+  </main>
+
+  <footer>
+    <p>춘천신협 금융창구 시뮬레이션 · 가상 교육용 게임</p>
+    <p>실제 금융상품의 금리 및 대출 심사 기준과 다를 수 있습니다.</p>
+  </footer>
+
+  <script src="game.js"></script>
+</body>
+</html>
