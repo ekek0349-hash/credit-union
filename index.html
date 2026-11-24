@@ -1,140 +1,118 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>춘천신협 금융창구 시뮬레이션</title>
+  <title>춘천신협 3D 창구 시뮬레이터</title>
+
+  <!-- 디자인 파일 -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <h1>🏦 춘천신협</h1>
-      <p>금융창구 실무 시뮬레이션</p>
-    </div>
-    <div class="stats">
-      <span>영업일 <b id="day">1</b>일차</span>
-      <span>누적 실적 <b id="sales">0</b>만원</span>
-      <span>고객 만족도 <b id="satisfaction">80</b></span>
-      <span>직급 <b id="rank">신입 직원</b></span>
-    </div>
-  </header>
 
-  <main class="container">
-    <section class="welcome">
-      <h2>오늘도 조합원을 위한 하루를 시작합니다.</h2>
-      <p>고객의 상황을 파악하고 적합한 금융상품을 안내해 보세요.</p>
-    </section>
+  <div id="game">
 
-    <section class="dashboard">
-      <div class="panel customer-panel">
-        <div class="section-heading">
-          <h2>👤 창구 상담</h2>
-          <span id="customerStatus" class="status">대기 중</span>
+    <!-- 상단 정보 -->
+    <div id="hud">
+      <div class="brand">
+        <strong>CHUNCHEON CREDIT UNION</strong>
+        <span>근화지점 · 금융창구 시뮬레이터</span>
+      </div>
+
+      <div class="hud-stats">
+        <span>영업일 <b id="day">1</b>일차</span>
+        <span>시각 <b id="clock">09:00</b></span>
+        <span>실적 <b id="sales">0</b>만원</span>
+        <span>만족도 <b id="satisfaction">80</b></span>
+      </div>
+    </div>
+
+    <!-- 화면 중앙 조준점 -->
+    <div id="crosshair"></div>
+
+    <!-- 시작 안내 -->
+    <div id="hint">
+      화면을 클릭해 마우스를 잠그고 이동하세요
+    </div>
+
+    <!-- 조작 방법 -->
+    <div id="help">
+      <b>조작 방법</b>
+      <span>W A S D : 이동</span>
+      <span>마우스 : 시점 회전</span>
+      <span>Shift : 달리기</span>
+      <span>E : 사물·고객 상호작용</span>
+      <span>ESC : 마우스 해제</span>
+    </div>
+
+    <!-- 오늘의 업무 -->
+    <div id="objective">
+      <small>오늘의 업무</small>
+      <strong id="objectiveText">
+        영업점에 출근했습니다. 고객을 맞이하세요.
+      </strong>
+    </div>
+
+    <!-- 고객 상담창 -->
+    <div id="interaction" class="hidden">
+      <div class="interaction-card">
+
+        <div class="card-top">
+          <span id="interactionTag">고객 상담</span>
+          <button id="closeInteraction">×</button>
         </div>
 
-        <div id="customer">
-          <h3 id="customerName">고객을 기다리고 있습니다.</h3>
-          <p id="customerInfo">영업을 시작해 주세요.</p>
-          <p id="customerRequest"></p>
-        </div>
+        <h2 id="interactionTitle">고객</h2>
 
-        <div class="conversation">
-          <div class="conversation-title">상담 내용</div>
-          <div id="dialogue" class="dialogue">
-            고객이 방문하면 상담 내용이 이곳에 표시됩니다.
+        <p id="interactionText"></p>
+
+        <div id="interactionChoices"></div>
+
+        <div id="interactionFooter"></div>
+
+      </div>
+    </div>
+
+    <!-- 전산 업무창 -->
+    <div id="computer" class="hidden">
+      <div class="computer-window">
+
+        <div class="computer-head">
+          <div>
+            <b>CU BANKING SYSTEM</b>
+            <small>춘천신협 내부 업무 연습용 전산</small>
           </div>
-        </div>
 
-        <div id="choices" class="choices"></div>
-
-        <div class="customer-actions">
-          <button class="main-btn" id="nextCustomer">
-            다음 고객 응대하기
-          </button>
-          <button class="sub-btn" id="finishConsult" disabled>
-            상담 마무리
+          <button id="closeComputer">
+            전산 종료 ×
           </button>
         </div>
+
+        <nav class="tabs">
+          <button class="tab active" data-tab="deposit">예금</button>
+          <button class="tab" data-tab="loan">대출</button>
+          <button class="tab" data-tab="mutual">공제</button>
+          <button class="tab" data-tab="member">조합원</button>
+        </nav>
+
+        <div id="computerContent"></div>
+
       </div>
+    </div>
 
-      <div class="panel">
-        <h2>📊 지점 현황</h2>
-        <div class="stat-card">
-          <span>예금 실적</span>
-          <strong id="depositTotal">0만원</strong>
-        </div>
-        <div class="stat-card">
-          <span>대출 실적</span>
-          <strong id="loanTotal">0만원</strong>
-        </div>
-        <div class="stat-card">
-          <span>공제 상담</span>
-          <strong id="insuranceTotal">0건</strong>
-        </div>
-        <div class="stat-card">
-          <span>오늘 응대 고객</span>
-          <strong id="customerCount">0명</strong>
-        </div>
-        <div class="stat-card">
-          <span>상담 숙련도</span>
-          <strong id="skill">1레벨</strong>
-        </div>
-        <div class="stat-card">
-          <span>월간 목표 달성률</span>
-          <strong id="goal">0%</strong>
-        </div>
-      </div>
-    </section>
+    <!-- 알림 -->
+    <div id="toast"></div>
 
-    <section class="panel">
-      <h2>💬 상담 진행 현황</h2>
-      <div class="progress-track">
-        <div id="consultProgress" class="progress-bar"></div>
-      </div>
-      <p id="consultStep" class="muted">고객 상담을 시작해 주세요.</p>
-    </section>
+    <!-- 하단 안내 -->
+    <div id="bottomPrompt">
+      주변을 둘러보세요. 창구와 전산 책상에서 E 키를 누를 수 있습니다.
+    </div>
 
-    <section class="work-section">
-      <h2>💼 금융 업무 메뉴</h2>
-      <div class="work-grid">
-        <button class="work-btn" onclick="openWork('deposit')">
-          💰 예금 업무
-          <small>정기예금 · 적금 · 출자금</small>
-        </button>
-        <button class="work-btn" onclick="openWork('loan')">
-          🏠 대출 업무
-          <small>담보대출 · 햇살론 · 전세대출</small>
-        </button>
-        <button class="work-btn" onclick="openWork('insurance')">
-          🛡️ 공제 업무
-          <small>화재 · 운전자 · 간병</small>
-        </button>
-        <button class="work-btn" onclick="openWork('record')">
-          📒 업무 일지
-          <small>실적 및 상담 기록</small>
-        </button>
-      </div>
-    </section>
+  </div>
 
-    <section class="panel work-panel" id="workPanel">
-      <h2>업무 메뉴</h2>
-      <p>원하는 업무를 선택해 주세요.</p>
-    </section>
+  <!-- 3D 게임 실행 파일 -->
+  <script type="module" src="game.js"></script>
 
-    <section class="panel">
-      <h2>📅 영업 마감</h2>
-      <p>오늘의 업무를 마감하고 다음 영업일로 넘어갑니다.</p>
-      <button class="main-btn" onclick="endDay()">하루 마감하기</button>
-      <div id="dayResult"></div>
-    </section>
-  </main>
-
-  <footer>
-    <p>춘천신협 금융창구 실무 시뮬레이션</p>
-    <p>가상 교육용 게임이며 실제 금융상품 및 심사 기준과 다를 수 있습니다.</p>
-  </footer>
-
-  <script src="game.js"></script>
 </body>
 </html>
