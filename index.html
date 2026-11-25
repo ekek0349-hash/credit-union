@@ -4,129 +4,66 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>춘천신협 금융창구 시뮬레이터</title>
-  <link rel="icon" href="data:,">
+  <title>춘천신협 3D 금융창구</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div id="game">
-    <header id="hud">
-      <div class="branch-name">춘천신협 <span>근화지점</span></div>
-      <div class="hud-info">
+    <div id="hud">
+      <div class="brand">
+        <span class="brand-icon">CU</span>
+        <div>
+          <strong>춘천신협</strong>
+          <small>근화지점 금융창구</small>
+        </div>
+      </div>
+      <div class="stats">
         <div>영업일<strong id="day">1일차</strong></div>
-        <div>시각<strong id="clock">09:00</strong></div>
-        <div>실적<strong id="sales">0원</strong></div>
+        <div>현재 시각<strong id="clock">09:00</strong></div>
+        <div>오늘 실적<strong id="sales">0원</strong></div>
         <div>고객 만족도<strong id="satisfaction">100%</strong></div>
       </div>
-    </header>
+    </div>
 
-    <main id="office">
-      <section class="bank-scene">
-        <div class="scene-title">CHUNCHEON CREDIT UNION · 근화지점</div>
-        <div class="window-wall">
-          <div class="wall-sign">춘천신협 근화지점</div>
-          <div class="window-light"></div>
-        </div>
+    <div id="scene-container"></div>
 
-        <div class="waiting-area">
-          <div class="area-label">CUSTOMER WAITING AREA</div>
-          <div class="waiting-seats">
-            <div class="seat">🪑</div>
-            <div class="seat">🪑</div>
-            <div class="seat">🪑</div>
-            <div class="seat">🪑</div>
-          </div>
-          <div id="queue-people" class="queue-people"></div>
-          <div class="queue-count">대기 고객 <strong id="queue-count">0</strong>명</div>
-        </div>
+    <div id="scene-label">CHUNCHEON CREDIT UNION · GEUNHWA BRANCH</div>
 
-        <div class="counter-area">
-          <div class="counter-sign">CUSTOMER SERVICE</div>
-          <div class="counter-desk">
-            <div class="desk-monitor">
-              <div class="monitor-screen">
-                <span>CHUNCHEON CU</span>
-                <small>금융업무 전산</small>
-              </div>
-              <div class="monitor-stand"></div>
-              <div class="monitor-base"></div>
-            </div>
-            <div class="desk-items">📁　🖊️　📞</div>
-          </div>
-          <div id="active-customer" class="active-customer">
-            <div class="customer-avatar">🙂</div>
-            <div class="customer-caption">고객 호출 대기 중</div>
-          </div>
-          <div class="employee-seat">
-            <div class="employee-avatar">👔</div>
-            <span>창구 직원</span>
-          </div>
-        </div>
-      </section>
-
-      <aside class="side-panel">
-        <div class="side-heading">창구 업무 현황</div>
-        <div class="status-card">
-          <span class="muted">현재 상담</span>
-          <strong id="current-customer">대기 중</strong>
-          <small id="current-status">고객을 호출해 주세요.</small>
-        </div>
-        <div class="status-card">
-          <span class="muted">다음 대기 고객</span>
-          <strong id="next-customer">-</strong>
-          <small id="next-purpose">대기 고객 없음</small>
-        </div>
-        <div class="ticket-machine">
-          <div class="ticket-display">
-            <small>순번 호출 시스템</small>
-            <strong id="ticket-number">대기</strong>
-          </div>
-          <button id="call-button" class="primary-button">다음 고객 호출</button>
-          <button id="finish-button" class="secondary-button" disabled>상담 종료</button>
-        </div>
-        <div class="quick-stats">
-          <div><span>오늘 상담 완료</span><strong id="completed-count">0건</strong></div>
-          <div><span>현재 대기 인원</span><strong id="waiting-count">0명</strong></div>
-        </div>
-        <div class="notice">
-          <strong>안내</strong>
-          <p>고객을 호출한 뒤 창구에 도착하면 상담을 진행할 수 있습니다.</p>
-        </div>
-      </aside>
-    </main>
-
-    <section id="dialog" class="panel hidden">
-      <div class="panel-top">
+    <section id="queue-panel" class="glass-panel">
+      <div class="panel-heading">
         <div>
-          <small>고객 상담 진행</small>
-          <h2 id="customer-name">고객 이름</h2>
+          <small>WAITING ROOM</small>
+          <h2>고객 대기 현황</h2>
         </div>
-        <button id="close-dialog" class="close-button" title="상담창 접기">−</button>
+        <span id="waiting-count" class="count">0명</span>
       </div>
-      <div id="customer-profile"></div>
-      <div class="conversation-area">
-        <div class="conversation-label">CUSTOMER</div>
-        <div id="customer-message" class="customer-bubble"></div>
-        <div id="dialog-feedback"></div>
-      </div>
-      <div id="answer-list"></div>
+      <div id="queue-list"></div>
+      <button id="call-button" class="primary-button">다음 고객 호출하기</button>
+      <p class="small-hint">호출 버튼을 누르면 대기 중인 고객이 창구로 이동합니다.</p>
     </section>
 
-    <section id="computer" class="panel hidden">
-      <div class="panel-top">
+    <section id="customer-panel" class="glass-panel hidden">
+      <div class="panel-heading">
         <div>
-          <small>CHUNCHEON CREDIT UNION</small>
-          <h2>금융업무 전산 시스템</h2>
+          <small>CUSTOMER CONSULTATION</small>
+          <h2 id="customer-name">고객 상담</h2>
         </div>
-        <button id="close-computer" class="close-button">✕</button>
+        <span id="customer-number" class="count">1번</span>
       </div>
-      <div class="computer-tabs">
-        <button data-tab="deposit" class="active">수신 업무</button>
-        <button data-tab="loan">여신 업무</button>
-        <button data-tab="insurance">공제 업무</button>
-        <button data-tab="member">조합원 업무</button>
+      <div id="customer-info"></div>
+      <div class="progress-area">
+        <div class="progress-label">
+          <span>상담 진행</span>
+          <strong id="step-count">1 / 7</strong>
+        </div>
+        <div class="progress-track">
+          <div id="progress-bar"></div>
+        </div>
       </div>
-      <div id="computer-content"></div>
+      <div id="customer-message"></div>
+      <div id="answer-list"></div>
+      <div id="feedback"></div>
+      <button id="finish-button" class="primary-button hidden">상담 완료하기</button>
     </section>
 
     <div id="toast"></div>
@@ -134,19 +71,19 @@
     <div id="start-screen">
       <div class="start-card">
         <div class="start-logo">CU</div>
-        <h1>춘천신협 금융창구 시뮬레이터</h1>
-        <p>근화지점의 실제 창구 업무를 경험해 보세요.</p>
-        <div class="start-guide">
-          <p>① 창구 직원 자리에 고정되어 있습니다.</p>
-          <p>② 순번 호출 버튼을 눌러 고객을 부르세요.</p>
-          <p>③ 고객과 여러 단계의 상담을 진행하세요.</p>
-          <p>④ 필요한 전산 업무는 직접 선택하고 입력하세요.</p>
+        <p class="eyebrow">CHUNCHEON CREDIT UNION</p>
+        <h1>3D 금융창구 시뮬레이터</h1>
+        <p>춘천신협 근화지점의 창구 직원이 되어<br>다양한 고객의 금융 상담을 진행해 보세요.</p>
+        <div class="start-features">
+          <span>3D 고객 캐릭터</span>
+          <span>실제 창구 상담</span>
+          <span>다양한 금융 업무</span>
         </div>
         <button id="start-button" class="primary-button">영업 시작하기</button>
       </div>
     </div>
   </div>
 
-  <script src="./game.js"></script>
+  <script type="module" src="./game.js"></script>
 </body>
 </html>
