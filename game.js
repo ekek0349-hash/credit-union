@@ -2,1086 +2,683 @@
 (() => {
   "use strict";
 
-  // 중복 실행 방지
-  if (window.__creditUnionGameInitialized) return;
-  window.__creditUnionGameInitialized = true;
+  if (window.__CU_FIXED_GAME__) return;
+  window.__CU_FIXED_GAME__ = true;
 
-  const $ = (id) => document.getElementById(id);
+  const $ = id => document.getElementById(id);
 
-  const el = {
-    startScreen: $("start-screen"),
-    startButton: $("start-button"),
-    clock: $("clock"),
-    sales: $("sales"),
-    satisfaction: $("satisfaction"),
-    scene: $("scene-container"),
-    queue: $("queue-list"),
-    waiting: $("waiting-count"),
-    call: $("call-button"),
-    panel: $("customer-panel"),
-    name: $("customer-name"),
-    number: $("customer-number"),
-    info: $("customer-info"),
-    step: $("step-count"),
-    progress: $("progress-bar"),
-    message: $("customer-message"),
-    answers: $("answer-list"),
-    feedback: $("feedback"),
-    finish: $("finish-button"),
-    toast: $("toast")
-  };
-
-  const state = {
-    started: false,
-    customers: [],
-    current: null,
-    number: 1,
-    completed: 0,
-    sales: 0,
-    satisfaction: 100,
-    hour: 9,
-    minute: 0,
-    step: 0,
+  const S = {
     THREE: null,
     scene: null,
     camera: null,
     renderer: null,
+    clock: null,
+    queue: [],
     people: [],
-    threeReady: false,
-    questionShown: false
+    current: null,
+    started: false,
+    number: 0,
+    minutes: 540,
+    day: 1,
+    sales: 0,
+    satisfaction: 100
   };
 
   const cases = [
-    {
-      type: "정기예금",
-      purpose: "목돈 예치 및 금리 상담",
-      amount: "5,000만 원",
-      intro: "여유자금이 생겨서 정기예금을 알아보러 왔습니다.",
-      questions: [
-        "어떤 목적으로 자금을 예치하시려고 하나요?",
-        "예치 기간은 어느 정도 생각하고 계신가요?",
-        "다른 금융기관에 예치된 자금도 있으신가요?",
-        "예금자보호에 대해 알고 계신가요?",
-        "저율과세와 출자금 혜택도 안내해 드릴까요?",
-        "중도해지 가능성도 고려해야 할까요?",
-        "오늘 가입을 진행하시겠습니까?"
-      ]
-    },
-    {
-      type: "예금 재예치",
-      purpose: "만기 예금 재예치",
-      amount: "3,000만 원",
-      intro: "기존 예금이 만기되어 다시 예치하려고 방문했습니다.",
-      questions: [
-        "기존 예금은 언제 만기되셨나요?",
-        "만기 자금은 어느 정도인가요?",
-        "이번에는 어느 정도 기간으로 예치하시겠습니까?",
-        "다른 금융기관 금리도 비교해 보셨나요?",
-        "저율과세 적용 가능 여부를 확인해 드릴까요?",
-        "출자금 운용에도 관심이 있으신가요?",
-        "재예치를 진행해 드릴까요?"
-      ]
-    },
-    {
-      type: "출자금",
-      purpose: "조합원 가입 상담",
-      amount: "500만 원",
-      intro: "신협 조합원 가입과 출자금에 대해 알아보러 왔습니다.",
-      questions: [
-        "신협 조합원 가입은 처음이신가요?",
-        "출자금에 대해 알고 계신가요?",
-        "출자금과 예금의 차이를 설명해 드릴까요?",
-        "출자금 배당에 대해 안내해 드릴까요?",
-        "출자금 환급 시기와 절차를 설명해 드릴까요?",
-        "조합원 혜택도 함께 안내해 드릴까요?",
-        "오늘 조합원 가입을 진행하시겠습니까?"
-      ]
-    },
-    {
-      type: "정기적금",
-      purpose: "매월 적립식 저축",
-      amount: "월 100만 원",
-      intro: "매월 일정 금액을 저축하고 싶어서 방문했습니다.",
-      questions: [
-        "매월 얼마 정도 저축할 계획이신가요?",
-        "저축 기간은 어느 정도 생각하시나요?",
-        "자동이체를 설정해 드릴까요?",
-        "적금 금리와 우대 조건을 안내해 드릴까요?",
-        "모바일뱅킹도 함께 이용하시겠습니까?",
-        "중도해지 시 이율이 달라지는 점을 알고 계신가요?",
-        "오늘 적금 가입을 진행하시겠습니까?"
-      ]
-    },
-    {
-      type: "체크카드",
-      purpose: "체크카드 발급",
-      amount: "신규 발급",
-      intro: "체크카드를 새로 발급받으려고 왔습니다.",
-      questions: [
-        "현재 신협 입출금 계좌를 보유하고 계신가요?",
-        "체크카드는 처음 발급받으시나요?",
-        "주로 어떤 용도로 사용하실 예정인가요?",
-        "카드 이용 혜택을 안내해 드릴까요?",
-        "모바일뱅킹도 함께 이용하시겠습니까?",
-        "카드 결제 계좌를 확인해 드릴까요?",
-        "오늘 카드 발급을 진행하시겠습니까?"
-      ]
-    },
-    {
-      type: "햇살론",
-      purpose: "서민금융 상담",
-      amount: "1,000만 원",
-      intro: "생활자금이 필요해서 햇살론 상담을 받으러 왔습니다.",
-      questions: [
-        "현재 직장인이신가요, 사업자이신가요?",
-        "현재 근무 또는 사업 기간은 얼마나 되셨나요?",
-        "소득을 확인할 수 있는 서류가 있으신가요?",
-        "다른 금융기관 대출도 이용 중이신가요?",
-        "고금리 대출을 상환하는 목적도 있으신가요?",
-        "보증 심사와 신용정보 동의 절차를 안내해 드릴까요?",
-        "필요 서류와 심사 절차를 안내해 드릴까요?"
-      ]
-    },
-    {
-      type: "담보대출",
-      purpose: "부동산 담보대출 상담",
-      amount: "1억 원",
-      intro: "부동산을 담보로 대출을 받고 싶어서 방문했습니다.",
-      questions: [
-        "담보로 제공하실 부동산은 어떤 종류인가요?",
-        "부동산은 본인 명의로 되어 있으신가요?",
-        "필요하신 대출 금액은 얼마인가요?",
-        "현재 다른 대출이 설정되어 있나요?",
-        "소득을 확인할 수 있는 서류가 있으신가요?",
-        "등기부등본과 선순위 권리를 확인해도 될까요?",
-        "감정평가와 내부 심사 절차를 안내해 드릴까요?"
-      ]
-    },
-    {
-      type: "전세자금대출",
-      purpose: "전세자금대출 상담",
-      amount: "8,000만 원",
-      intro: "전세 계약을 앞두고 대출 상담을 받으러 왔습니다.",
-      questions: [
-        "전세 계약은 이미 체결하셨나요?",
-        "전세 보증금은 얼마인가요?",
-        "입주 예정일은 언제인가요?",
-        "현재 무주택 여부를 확인해도 될까요?",
-        "소득과 재직을 확인할 수 있는 서류가 있으신가요?",
-        "보증기관과 보증서 발급 절차를 안내해 드릴까요?",
-        "필요 서류를 확인하고 심사를 준비해 드릴까요?"
-      ]
-    },
-    {
-      type: "화재공제",
-      purpose: "화재공제 상담",
-      amount: "건물 보장 상담",
-      intro: "건물 화재보험에 대해 상담받고 싶습니다.",
-      questions: [
-        "공제 가입을 원하시는 대상은 무엇인가요?",
-        "건물은 본인 소유인가요, 임차 중인가요?",
-        "현재 가입되어 있는 화재보험이 있으신가요?",
-        "기존 보험의 보장 내용을 확인해 볼까요?",
-        "풍수재 등 추가 위험도 고려하시나요?",
-        "건물 구조와 면적을 확인해도 될까요?",
-        "기존 계약과 비교해 설계안을 받아보시겠습니까?"
-      ]
-    },
-    {
-      type: "상속",
-      purpose: "상속 예금 상담",
-      amount: "상속 예금",
-      intro: "가족이 돌아가셔서 예금 상속 절차를 알아보러 왔습니다.",
-      questions: [
-        "고인과 어떤 관계이신가요?",
-        "상속인은 몇 분 정도 계신가요?",
-        "상속 관련 서류를 준비하셨나요?",
-        "상속인 전원의 동의 여부를 확인할 수 있을까요?",
-        "상속 예금 잔액을 확인해 드릴까요?",
-        "필요한 가족관계 서류를 안내해 드릴까요?",
-        "서류 확인 후 지급 절차를 안내해 드릴까요?"
-      ]
-    },
-    {
-      type: "대출 연장",
-      purpose: "기존 대출 만기 연장",
-      amount: "기존 대출",
-      intro: "기존 대출의 만기가 다가와서 방문했습니다.",
-      questions: [
-        "현재 대출 만기일은 언제인가요?",
-        "현재 대출 원금은 어느 정도 남아 있나요?",
-        "최근 소득이나 재직 상태에 변동이 있으신가요?",
-        "다른 금융기관 대출이 추가되었나요?",
-        "이자 납입은 정상적으로 이루어지고 있나요?",
-        "일부 원금 상환도 고려하고 계신가요?",
-        "필요 서류와 연장 심사 절차를 안내해 드릴까요?"
-      ]
-    }
+    ["김영숙", 63, "정기예금 신규", "농협에서 만기된 5,000만원을 예치하려고 합니다.", [
+      "고객님의 자금 사용 계획과 예치 기간을 어떻게 확인하시겠습니까?",
+      "정기예금과 출자금의 차이를 설명해 보세요.",
+      "예금자보호와 세금 관련 유의사항을 어떻게 안내하시겠습니까?"
+    ]],
+    ["박정호", 45, "햇살론 상담", "직장에 재직 중이며 카드론 상환을 희망합니다.", [
+      "햇살론 상담 시 우선 확인할 사항은 무엇인가요?",
+      "소득과 재직기간은 어떤 자료로 확인하시겠습니까?",
+      "보증심사와 실제 대출 가능 금액에 대해 어떻게 설명하시겠습니까?"
+    ]],
+    ["이수진", 38, "주택담보대출", "아파트를 담보로 생활안정자금 대출을 문의했습니다.", [
+      "담보대출 상담에서 가장 먼저 확인할 내용은 무엇인가요?",
+      "등기부등본에서 어떤 사항을 확인하시겠습니까?",
+      "LTV와 DSR을 고객님께 쉽게 설명해 보세요."
+    ]],
+    ["최민수", 51, "예금 재예치", "기존 정기예금 8,000만원이 만기되었습니다.", [
+      "재예치 상담에서 자금 사용 계획을 어떻게 확인하시겠습니까?",
+      "예금 기간과 금리를 비교해 설명해 보세요.",
+      "조합원에게 추가로 안내할 수 있는 혜택은 무엇인가요?"
+    ]],
+    ["정미경", 57, "출자금 상담", "신협 조합원 가입과 출자금에 대해 문의했습니다.", [
+      "출자금이 무엇인지 설명해 보세요.",
+      "출자금과 예금의 차이는 무엇인가요?",
+      "출자금 가입 전 유의사항을 안내해 보세요."
+    ]],
+    ["한지영", 32, "전세자금대출", "전세 계약을 앞두고 대출을 문의했습니다.", [
+      "전세자금대출 상담에서 먼저 확인할 사항은 무엇인가요?",
+      "임대차계약서 외에 어떤 서류를 확인하시겠습니까?",
+      "보증기관 심사와 대출 실행 절차를 설명해 보세요."
+    ]],
+    ["오상철", 68, "정기적금 가입", "매월 100만원씩 저축하고 싶어 합니다.", [
+      "적금 가입 전에 어떤 내용을 확인하시겠습니까?",
+      "정기예금과 정기적금의 차이를 설명해 보세요.",
+      "중도해지 시 유의사항을 안내해 보세요."
+    ]],
+    ["윤서연", 29, "계좌개설 및 모바일뱅킹", "신협 계좌를 처음 개설하고 모바일뱅킹을 이용하려 합니다.", [
+      "신규 계좌 개설 시 확인할 사항은 무엇인가요?",
+      "모바일뱅킹 가입 절차를 설명해 보세요.",
+      "전자금융사기 예방을 위해 어떤 점을 안내하시겠습니까?"
+    ]],
+    ["장태식", 55, "화재공제 상담", "상가 건물을 운영하며 화재 관련 보장을 문의했습니다.", [
+      "화재공제 상담 시 먼저 확인할 사항은 무엇인가요?",
+      "건물과 시설물, 집기비품의 차이를 설명해 보세요.",
+      "기존 보험 가입 내역을 확인하는 이유는 무엇인가요?"
+    ]],
+    ["조은희", 72, "상속 예금 문의", "가족의 사망으로 예금 지급 절차를 문의했습니다.", [
+      "상속 예금 업무에서 우선 확인할 사항은 무엇인가요?",
+      "상속인 확인을 위해 어떤 서류가 필요할까요?",
+      "상속인 간 의견이 다를 경우 어떻게 처리하시겠습니까?"
+    ]]
   ];
 
-  const names = [
-    "김영숙", "박정희", "이정훈", "최민수", "한미경",
-    "윤선미", "김남국", "강민호", "오정희", "서영자",
-    "장현수", "임수진", "조성호", "문정희", "백승철",
-    "신영자", "차재필", "이경희", "전우진", "송미란",
-    "남진우", "최영희", "박창순", "김한수", "정태용"
-  ];
+  function style() {
+    if ($("cu-fix-style")) return;
 
-  const rand = (min, max) =>
-    Math.floor(Math.random() * (max - min + 1)) + min;
-
-  function toast(message) {
-    if (!el.toast) return;
-
-    el.toast.textContent = message;
-    el.toast.classList.add("show");
-
-    clearTimeout(toast.timeout);
-    toast.timeout = setTimeout(() => {
-      el.toast.classList.remove("show");
-    }, 2500);
-  }
-
-  function updateHUD() {
-    if (el.clock) {
-      el.clock.textContent =
-        String(state.hour).padStart(2, "0") + ":" +
-        String(state.minute).padStart(2, "0");
-    }
-
-    if (el.sales) {
-      el.sales.textContent = state.sales.toLocaleString("ko-KR");
-    }
-
-    if (el.satisfaction) {
-      el.satisfaction.textContent = state.satisfaction + "%";
-    }
-
-    if (el.waiting) {
-      el.waiting.textContent = state.customers.length;
-    }
-  }
-
-  function tickClock() {
-    state.minute++;
-
-    if (state.minute >= 60) {
-      state.minute = 0;
-      state.hour++;
-    }
-
-    if (state.hour >= 18) {
-      state.hour = 9;
-    }
-
-    updateHUD();
-  }
-
-  function createCustomer() {
-    const data = cases[rand(0, cases.length - 1)];
-
-    return {
-      id: state.number++,
-      name: names[rand(0, names.length - 1)],
-      type: data.type,
-      purpose: data.purpose,
-      amount: data.amount,
-      intro: data.intro,
-      questions: data.questions,
-      person: null,
-      satisfaction: rand(75, 100)
-    };
-  }
-
-  function addCustomer() {
-    const customer = createCustomer();
-    state.customers.push(customer);
-
-    if (state.threeReady) {
-      customer.person = createPerson(customer);
-
-      if (customer.person) {
-        customer.person.position.set(
-          rand(-4, 4) * 0.3,
-          0,
-          -2.5
-        );
+    const el = document.createElement("style");
+    el.id = "cu-fix-style";
+    el.textContent = `
+      #scene-container { position:relative!important; overflow:hidden!important; min-height:520px!important; background:#dce7ec!important; }
+      #scene-container canvas { display:block; width:100%; height:100%; }
+      #cu-dialog {
+        display:none; position:absolute; z-index:9999; left:50%; bottom:12px;
+        transform:translateX(-50%); width:min(650px,94%);
+        box-sizing:border-box; padding:18px; border-radius:14px;
+        background:#fff; color:#203040; box-shadow:0 8px 35px #0005;
+        font-family:Arial,sans-serif;
       }
-    }
-
-    renderQueue();
-    updateHUD();
+      #cu-dialog h3 { margin:7px 0; }
+      #cu-dialog p { line-height:1.5; }
+      #cu-dialog textarea {
+        display:block; width:100%; min-height:90px; box-sizing:border-box;
+        padding:12px; border:1px solid #bbc9d3; border-radius:8px;
+        font:inherit; margin-top:12px;
+      }
+      #cu-dialog button {
+        padding:11px 18px; margin-top:10px; border:0;
+        border-radius:8px; cursor:pointer; font-weight:bold;
+      }
+      #cu-submit { background:#145c86; color:white; }
+      #cu-finish { background:#e5edf2; color:#203040; margin-left:7px; }
+      #cu-message {
+        position:absolute; z-index:9998; top:12px; left:50%;
+        transform:translateX(-50%); display:none;
+        padding:10px 18px; border-radius:25px;
+        background:#173f5b; color:white; white-space:nowrap;
+      }
+    `;
+    document.head.appendChild(el);
   }
 
-  function renderQueue() {
-    if (!el.queue) return;
+  function makeUI() {
+    const host = $("scene-container") || $("game") || document.body;
 
-    el.queue.innerHTML = "";
-
-    if (!state.customers.length) {
-      el.queue.textContent = "대기 중인 고객이 없습니다.";
-      return;
+    if (!$("cu-dialog")) {
+      const panel = document.createElement("div");
+      panel.id = "cu-dialog";
+      panel.innerHTML = `
+        <small id="cu-type" style="color:#28739b;font-weight:bold"></small>
+        <h3 id="cu-name"></h3>
+        <p id="cu-info"></p>
+        <p id="cu-question" style="font-weight:bold"></p>
+        <textarea id="cu-answer" placeholder="고객님께 안내할 내용을 작성해 주세요."></textarea>
+        <button id="cu-submit">답변 제출</button>
+        <button id="cu-finish" style="display:none">상담 완료</button>
+        <p id="cu-feedback" style="font-size:13px;color:#547083"></p>
+      `;
+      host.appendChild(panel);
     }
 
-    state.customers.slice(0, 8).forEach((customer, index) => {
-      const item = document.createElement("div");
-      item.className = "queue-item";
+    if (!$("cu-message")) {
+      const msg = document.createElement("div");
+      msg.id = "cu-message";
+      host.appendChild(msg);
+    }
 
-      const number = document.createElement("span");
-      number.className = "queue-number";
-      number.textContent = index + 1;
+    $("cu-submit").addEventListener("click", submitAnswer);
+    $("cu-finish").addEventListener("click", finishCustomer);
+  }
 
-      const name = document.createElement("span");
-      name.className = "queue-customer";
-      name.textContent = customer.name;
+  function message(text) {
+    const el = $("cu-message");
+    el.textContent = text;
+    el.style.display = "block";
+    clearTimeout(S.messageTimer);
+    S.messageTimer = setTimeout(() => el.style.display = "none", 2200);
+  }
 
-      const purpose = document.createElement("span");
-      purpose.className = "queue-purpose";
-      purpose.textContent = customer.type;
+  function update() {
+    if ($("day")) $("day").textContent = S.day;
+    if ($("clock")) {
+      $("clock").textContent =
+        String(Math.floor(S.minutes / 60)).padStart(2, "0") + ":" +
+        String(S.minutes % 60).padStart(2, "0");
+    }
+    if ($("sales")) $("sales").textContent = S.sales.toLocaleString("ko-KR");
+    if ($("satisfaction")) $("satisfaction").textContent = S.satisfaction;
+    if ($("waiting-count")) $("waiting-count").textContent = S.queue.length;
 
-      item.append(number, name, purpose);
-      el.queue.appendChild(item);
+    if ($("queue-list")) {
+      $("queue-list").innerHTML = S.queue.map((c, i) =>
+        `<div style="padding:7px;border-bottom:1px solid #ddd">${i + 1}. ${c.name} · ${c.type}</div>`
+      ).join("") || "대기 고객이 없습니다.";
+    }
+  }
+
+  function mat(THREE, color, extra = {}) {
+    return new THREE.MeshStandardMaterial({ color, roughness:0.75, ...extra });
+  }
+
+  function box(THREE, parent, x, y, z, w, h, d, color) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      mat(THREE, color)
+    );
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    parent.add(m);
+    return m;
+  }
+
+  function textSign(THREE, text, x, y, z, width, height) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 100px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 512, 128);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshBasicMaterial({ map:texture, transparent:true })
+    );
+    mesh.position.set(x, y, z);
+    S.scene.add(mesh);
+  }
+
+  function createRoom(THREE) {
+    const scene = S.scene;
+    scene.background = new THREE.Color("#dce6eb");
+
+    box(THREE, scene, 0, -0.2, 0, 22, 0.4, 24, "#c6c9c6");
+    box(THREE, scene, 0, 4, -5.5, 22, 8, 0.3, "#e9e9e4");
+    box(THREE, scene, -10.8, 4, 0, 0.3, 8, 12, "#e9e9e4");
+    box(THREE, scene, 10.8, 4, 0, 0.3, 8, 12, "#e9e9e4");
+
+    // 신협 벽면 간판
+    box(THREE, scene, 0, 6.2, -5.25, 6, 1.15, 0.15, "#174d6c");
+    textSign(THREE, "신협  CREDIT UNION", 0, 6.2, -5.15, 5.6, 0.8);
+
+    box(THREE, scene, 0, 3.8, -5.2, 5, 0.65, 0.15, "#253f50");
+    textSign(THREE, "번호표를 뽑고 기다려 주세요", 0, 3.8, -5.1, 4.7, 0.4);
+
+    // 창구 카운터
+    box(THREE, scene, 0, 1.0, 0, 13, 1.0, 1.4, "#eeeae1");
+    box(THREE, scene, 0, 1.55, 0, 13, 0.12, 1.5, "#765b43");
+
+    // 창구 번호 표시
+    for (let i = 0; i < 4; i++) {
+      const x = -4.8 + i * 3.2;
+      box(THREE, scene, x, 2.25, -0.1, 0.8, 0.4, 0.12, "#174d6c");
+      textSign(THREE, String(i + 1), x, 2.25, -0.02, 0.5, 0.3);
+
+      // 모니터와 키보드
+      box(THREE, scene, x, 2.0, -0.85, 0.85, 0.55, 0.12, "#252c30");
+      box(THREE, scene, x, 2.02, -0.77, 0.72, 0.42, 0.02, "#91b4c4");
+      box(THREE, scene, x, 1.7, -0.5, 0.65, 0.05, 0.3, "#343b40");
+    }
+
+    // 유리 칸막이
+    const glass = mat(THREE, "#b8d5df", {
+      transparent:true,
+      opacity:0.3,
+      roughness:0.15
     });
+
+    for (let i = 0; i < 5; i++) {
+      const pane = new THREE.Mesh(
+        new THREE.BoxGeometry(2.45, 1.0, 0.04),
+        glass
+      );
+      pane.position.set(-5.6 + i * 2.8, 2.65, 0.1);
+      scene.add(pane);
+    }
+
+    // 대기 의자
+    for (let row = 0; row < 2; row++) {
+      for (let i = 0; i < 5; i++) {
+        const x = -5.5 + i * 2.7;
+        const z = 5.2 + row * 1.5;
+        box(THREE, scene, x, 0.7, z, 1.6, 0.16, 0.65, "#315a70");
+        box(THREE, scene, x, 1.15, z + 0.25, 1.6, 0.8, 0.15, "#315a70");
+      }
+    }
+
+    // 번호표 기기
+    box(THREE, scene, 7.7, 1.2, 2.8, 0.65, 1.5, 0.6, "#e9eceb");
+    box(THREE, scene, 7.7, 1.6, 2.46, 0.42, 0.32, 0.05, "#244a5e");
+
+    // 안내 데스크
+    box(THREE, scene, -8.2, 1, -1.8, 2, 1, 1.1, "#e4e7e5");
+    box(THREE, scene, -8.2, 1.55, -1.8, 2.1, 0.12, 1.2, "#765b43");
+
+    // 천장 조명
+    for (let i = 0; i < 5; i++) {
+      const light = new THREE.PointLight("#fff2d9", 35, 14);
+      light.position.set(-7 + i * 3.5, 7.5, 1);
+      scene.add(light);
+    }
+
+    scene.add(new THREE.HemisphereLight("#ffffff", "#8a989f", 2));
+
+    const sun = new THREE.DirectionalLight("#fff7e9", 2.5);
+    sun.position.set(-4, 10, 8);
+    scene.add(sun);
   }
 
-  function startGame() {
-    if (state.started) return;
-    state.started = true;
+  function person(THREE, employee = false) {
+    const g = new THREE.Group();
+    const skin = mat(THREE, "#d8a783");
+    const hair = mat(THREE, "#30231e");
+    const shirt = mat(THREE, employee ? "#1d4560" : "#627d8b");
+    const pants = mat(THREE, "#34414a");
+    const white = mat(THREE, "#ffffff");
+    const black = mat(THREE, "#242424");
 
-    if (el.startScreen) {
-      el.startScreen.style.display = "none";
+    function sphere(x, y, z, sx, sy, sz, material) {
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 16, 12),
+        material
+      );
+      m.position.set(x, y, z);
+      m.scale.set(sx, sy, sz);
+      g.add(m);
+      return m;
     }
 
-    if (el.panel) {
-      el.panel.style.display = "none";
+    // 다리
+    for (const x of [-0.14, 0.14]) {
+      box(THREE, g, x, 0.55, 0, 0.17, 0.85, 0.18, "#34414a");
+      box(THREE, g, x, 0.1, 0.1, 0.23, 0.15, 0.38, "#292929");
     }
 
-    for (let i = 0; i < 6; i++) {
-      addCustomer();
+    // 몸통
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.32, 0.62, 4, 10),
+      shirt
+    );
+    body.position.y = 1.45;
+    g.add(body);
+
+    sphere(0, 2.03, 0, 0.12, 0.16, 0.12, skin);
+    sphere(0, 2.38, 0, 0.34, 0.42, 0.3, skin);
+
+    // 귀와 머리
+    sphere(-0.34, 2.37, 0, 0.08, 0.12, 0.08, skin);
+    sphere(0.34, 2.37, 0, 0.08, 0.12, 0.08, skin);
+    sphere(0, 2.67, -0.02, 0.36, 0.22, 0.32, hair);
+    sphere(-0.25, 2.49, -0.01, 0.12, 0.2, 0.25, hair);
+    sphere(0.25, 2.49, -0.01, 0.12, 0.2, 0.25, hair);
+
+    // 눈, 눈썹, 코, 입
+    for (const x of [-0.12, 0.12]) {
+      sphere(x, 2.42, 0.277, 0.07, 0.07, 0.035, white);
+      sphere(x, 2.42, 0.31, 0.033, 0.04, 0.02, black);
+      sphere(x, 2.52, 0.28, 0.08, 0.025, 0.025, hair);
     }
 
-    // 2초마다 게임 시간 1분
-    setInterval(tickClock, 2000);
+    sphere(0, 2.32, 0.32, 0.05, 0.08, 0.07, skin);
 
-    // 15초마다 새 고객 방문
-    setInterval(() => {
-      if (state.customers.length < 12) {
-        addCustomer();
-        toast("새로운 고객이 방문했습니다.");
-      }
-    }, 15000);
+    const mouth = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.025, 0.02),
+      mat(THREE, "#914e48")
+    );
+    mouth.position.set(0, 2.22, 0.31);
+    g.add(mouth);
 
-    if (el.call) el.call.disabled = false;
+    // 팔
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.09, 0.5, 4, 8),
+        shirt
+      );
+      arm.position.set(side * 0.38, 1.45, 0);
+      arm.rotation.z = side * -0.12;
+      g.add(arm);
+      sphere(side * 0.4, 1.13, 0.05, 0.1, 0.12, 0.1, skin);
+    }
 
-    renderQueue();
-    updateHUD();
-    toast("영업을 시작했습니다!");
+    return g;
+  }
+
+  function createEmployee() {
+    const e = person(S.THREE, true);
+    e.position.set(0, 0, -1.5);
+    S.scene.add(e);
+  }
+
+  function createPersonForCustomer(c) {
+    if (!S.THREE || !S.scene || c.person) return;
+
+    const p = person(S.THREE);
+    // 손님은 책상 정면 중앙 통로에서 출발
+    p.position.set(0, 0, 8.5);
+    p.userData.targetZ = 1.9;
+    p.userData.walking = false;
+    p.userData.customer = c;
+
+    S.scene.add(p);
+    S.people.push(p);
+    c.person = p;
+  }
+
+  function newCustomer() {
+    const data = cases[Math.floor(Math.random() * cases.length)];
+    const c = {
+      name: data[0],
+      age: data[1],
+      type: data[2],
+      info: data[3],
+      questions: [...data[4]],
+      index: 0,
+      answers: [],
+      number: ++S.number,
+      person: null,
+      arrived: false
+    };
+
+    S.queue.push(c);
+    createPersonForCustomer(c);
+    update();
+  }
+
+  function openConsultation(c) {
+    if (S.current !== c || c.arrived) return;
+
+    c.arrived = true;
+    if (c.person) {
+      c.person.userData.walking = false;
+      c.person.position.z = 1.9;
+    }
+
+    const panel = $("cu-dialog");
+    panel.style.display = "block";
+    panel.style.visibility = "visible";
+
+    $("cu-type").textContent = c.type;
+    $("cu-name").textContent = `${c.number}번 고객 · ${c.name}님 (${c.age}세)`;
+    $("cu-info").textContent = c.info;
+
+    showQuestion(c);
+    message(`${c.name} 고객님이 창구에 도착했습니다.`);
+  }
+
+  function showQuestion(c) {
+    $("cu-question").textContent =
+      `질문 ${c.index + 1}/${c.questions.length} : ${c.questions[c.index]}`;
+
+    $("cu-answer").value = "";
+    $("cu-feedback").textContent = "답변을 작성하고 제출해 줘.";
+    $("cu-submit").style.display = "inline-block";
+    $("cu-finish").style.display = "none";
+    $("cu-answer").focus();
   }
 
   function callCustomer() {
-    if (!state.started) {
-      toast("먼저 영업을 시작해 주세요.");
+    if (!S.started) {
+      message("먼저 영업을 시작해 줘.");
       return;
     }
 
-    if (state.current) {
-      toast("현재 고객 상담을 먼저 완료해 주세요.");
+    if (S.current) {
+      message("현재 고객 상담을 먼저 완료해 줘.");
       return;
     }
 
-    if (!state.customers.length) {
-      toast("대기 중인 고객이 없습니다.");
-      return;
+    if (S.queue.length === 0) newCustomer();
+
+    const c = S.queue.shift();
+    S.current = c;
+    update();
+
+    if (c.person) {
+      c.person.userData.walking = true;
+      c.person.userData.targetZ = 1.9;
     }
 
-    const customer = state.customers.shift();
+    message(`${c.name} 고객님을 호출했습니다.`);
 
-    state.current = customer;
-    state.step = 0;
-    state.questionShown = false;
-
-    if (el.call) el.call.disabled = true;
-
-    renderQueue();
-    updateHUD();
-
-    toast(customer.name + " 고객님을 호출했습니다.");
-
-    // 3D 캐릭터가 없으면 즉시 상담 시작
-    if (!customer.person || !state.threeReady) {
-      showQuestion();
-      return;
-    }
-
-    // 고객을 창구 앞으로 이동
-    customer.person.userData.targetZ = 2.2;
-    customer.person.userData.walking = true;
-    customer.person.userData.onArrive = showQuestion;
-
-    // 이동 애니메이션이 실패해도 상담창은 반드시 열리도록 처리
-    customer.arrivalFallback = setTimeout(() => {
-      if (state.current === customer && !state.questionShown) {
-        customer.person.position.z = 2.2;
-        customer.person.userData.walking = false;
-        showQuestion();
-      }
-    }, 5000);
-  }
-
-  function showQuestion() {
-    const customer = state.current;
-    if (!customer || state.questionShown) return;
-
-    state.questionShown = true;
-    clearTimeout(customer.arrivalFallback);
-
-    if (el.panel) {
-      el.panel.style.display = "block";
-    }
-
-    if (el.name) el.name.textContent = customer.name;
-
-    if (el.number) {
-      el.number.textContent = "대기번호 " + customer.id;
-    }
-
-    if (el.info) {
-      el.info.textContent =
-        customer.type + " · " +
-        customer.purpose + " · " +
-        customer.amount;
-    }
-
-    if (el.message) {
-      el.message.textContent =
-        "안녕하세요. " + customer.intro;
-    }
-
-    renderQuestion();
-    toast(customer.name + " 고객 상담을 시작합니다.");
-  }
-
-  function renderQuestion() {
-    const customer = state.current;
-    if (!customer) return;
-
-    const total = customer.questions.length;
-    const question = customer.questions[state.step];
-
-    if (el.step) {
-      el.step.textContent = (state.step + 1) + " / " + total;
-    }
-
-    if (el.progress) {
-      el.progress.style.width =
-        ((state.step + 1) / total * 100) + "%";
-    }
-
-    if (el.message) {
-      el.message.textContent = question;
-    }
-
-    if (el.feedback) {
-      el.feedback.textContent = "";
-      el.feedback.style.display = "none";
-    }
-
-    if (el.finish) {
-      el.finish.style.display = "none";
-    }
-
-    if (!el.answers) return;
-
-    el.answers.innerHTML = "";
-
-    const label = document.createElement("label");
-    label.textContent = "고객에게 설명할 답변을 작성해 주세요.";
-    label.style.display = "block";
-    label.style.marginBottom = "8px";
-
-    const input = document.createElement("textarea");
-    input.id = "customer-answer";
-    input.placeholder =
-      "예: 고객님의 상황과 필요 서류를 먼저 확인한 뒤 정확한 조건을 안내해 드리겠습니다.";
-    input.rows = 4;
-    input.style.width = "100%";
-    input.style.boxSizing = "border-box";
-    input.style.padding = "12px";
-    input.style.border = "1px solid #ccc";
-    input.style.borderRadius = "10px";
-    input.style.fontSize = "14px";
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "답변 제출";
-    button.style.marginTop = "10px";
-    button.addEventListener("click", submitAnswer);
-
-    el.answers.append(label, input, button);
-    input.focus();
+    // 이동 애니메이션과 독립적으로 상담창을 반드시 실행
+    clearTimeout(S.consultTimer);
+    S.consultTimer = setTimeout(() => {
+      openConsultation(c);
+    }, 1800);
   }
 
   function submitAnswer() {
-    const input = $("customer-answer");
-    const answer = input ? input.value.trim() : "";
-
-    if (answer.length < 8) {
-      toast("답변을 조금 더 구체적으로 입력해 주세요.");
+    const c = S.current;
+    if (!c || !c.arrived) {
+      message("고객 도착을 확인하고 다시 시도해 줘.");
       return;
     }
 
-    const customer = state.current;
-    if (!customer) return;
+    const answer = $("cu-answer").value.trim();
+
+    if (answer.length < 5) {
+      $("cu-feedback").textContent = "답변을 조금 더 자세히 작성해 줘.";
+      return;
+    }
+
+    c.answers.push(answer);
 
     const keywords = [
-      "확인", "안내", "설명", "서류", "조건",
-      "금리", "소득", "기간", "상환", "심사",
-      "보증", "동의", "고객", "상담", "필요",
-      "가능", "비교", "절차", "확인해"
+      "금리", "만기", "소득", "재직", "보증", "신용", "상환",
+      "등기", "담보", "LTV", "DSR", "예금자보호", "출자금",
+      "조합원", "서류", "확인", "약관", "보장", "계약", "심사"
     ];
 
-    const matched = keywords.filter(word =>
-      answer.includes(word)
-    ).length;
+    const hits = keywords.filter(k => answer.includes(k)).length;
+    const score = Math.min(10, 5 + hits);
 
-    let score = 65 + Math.min(25, matched * 5);
+    S.satisfaction = Math.max(0, Math.min(100,
+      S.satisfaction + (score >= 7 ? 1 : -1)
+    ));
 
-    if (answer.length >= 40) score += 5;
-    if (answer.length >= 80) score += 5;
+    c.index++;
 
-    score = Math.min(100, score);
-
-    customer.satisfaction = Math.round(
-      (customer.satisfaction + score) / 2
-    );
-
-    state.step++;
-
-    if (state.step >= customer.questions.length) {
-      if (el.answers) el.answers.innerHTML = "";
-
-      if (el.message) {
-        el.message.textContent =
-          "상담이 완료되었습니다. 고객에게 마지막 안내를 해 주세요.";
-      }
-
-      if (el.step) {
-        el.step.textContent =
-          customer.questions.length + " / " +
-          customer.questions.length;
-      }
-
-      if (el.progress) el.progress.style.width = "100%";
-
-      if (el.feedback) {
-        el.feedback.style.display = "block";
-        el.feedback.textContent =
-          "상담 답변이 모두 접수되었습니다. 고객 만족도 " +
-          customer.satisfaction + "%";
-      }
-
-      if (el.finish) {
-        el.finish.style.display = "block";
-        el.finish.textContent = "상담 완료 및 고객 보내기";
-      }
-
-      return;
+    if (c.index < c.questions.length) {
+      $("cu-feedback").textContent =
+        `답변 저장 완료 · 평가 ${score}/10점 · 다음 질문으로 넘어가자.`;
+      showQuestion(c);
+    } else {
+      $("cu-question").textContent = "모든 상담 질문을 완료했습니다.";
+      $("cu-answer").style.display = "none";
+      $("cu-submit").style.display = "none";
+      $("cu-finish").style.display = "inline-block";
+      $("cu-feedback").textContent = "상담을 마무리하고 다음 고객을 호출해 줘.";
     }
 
-    if (el.feedback) {
-      el.feedback.style.display = "block";
-      el.feedback.textContent =
-        score >= 90
-          ? "훌륭한 상담입니다! 고객이 만족하고 있습니다."
-          : score >= 80
-          ? "좋은 답변입니다. 다음 상담을 진행해 주세요."
-          : "답변이 접수되었습니다. 조금 더 구체적으로 안내해 보세요.";
-    }
-
-    renderQuestion();
-    updateHUD();
+    update();
   }
 
   function finishCustomer() {
-    const customer = state.current;
-    if (!customer) return;
+    const c = S.current;
+    if (!c) return;
 
-    state.completed++;
+    clearTimeout(S.consultTimer);
 
-    const sales = {
-      "정기예금": 5000,
-      "예금 재예치": 3000,
-      "출자금": 500,
-      "정기적금": 100,
-      "체크카드": 30,
-      "햇살론": 1000,
-      "담보대출": 10000,
-      "전세자금대출": 8000,
-      "화재공제": 200,
-      "상속": 0,
-      "대출 연장": 0
-    };
+    $("cu-dialog").style.display = "none";
+    $("cu-answer").style.display = "block";
 
-    state.sales += sales[customer.type] || 0;
-
-    state.satisfaction = Math.round(
-      (state.satisfaction * (state.completed - 1) +
-        customer.satisfaction) / state.completed
-    );
-
-    if (el.panel) el.panel.style.display = "none";
-
-    if (customer.person) {
-      customer.person.userData.targetZ = -3;
-      customer.person.userData.walking = true;
-
-      customer.person.userData.onArrive = () => {
-        state.scene.remove(customer.person);
-        state.people = state.people.filter(
-          p => p !== customer.person
-        );
-      };
-
-      // 퇴장 애니메이션이 끝나지 않아도 캐릭터 제거
-      setTimeout(() => {
-        if (customer.person && state.scene) {
-          state.scene.remove(customer.person);
-          state.people = state.people.filter(
-            p => p !== customer.person
-          );
-        }
-      }, 6000);
+    if (c.person) {
+      c.person.userData.targetZ = 9;
+      c.person.userData.walking = true;
+      c.person.userData.leaving = true;
     }
 
-    clearTimeout(customer.arrivalFallback);
+    S.sales++;
+    S.current = null;
 
-    state.current = null;
-    state.step = 0;
-    state.questionShown = false;
-
-    if (el.call) el.call.disabled = false;
-
-    updateHUD();
-    renderQueue();
-
-    toast(customer.name + " 고객 상담이 완료되었습니다.");
+    update();
+    message(`${c.name} 고객님 상담이 완료됐습니다.`);
   }
 
-  // ----------------------------------
-  // 3D 공간 만들기
-  // ----------------------------------
+  function animate() {
+    if (!S.renderer) return;
 
-  async function initializeThree() {
-    if (!el.scene) return;
+    requestAnimationFrame(animate);
 
+    const dt = Math.min(S.clock.getDelta(), 0.05);
+
+    for (const p of [...S.people]) {
+      if (!p.userData.walking) continue;
+
+      const target = p.userData.targetZ;
+      const difference = target - p.position.z;
+      const speed = p.userData.leaving ? 3.0 : 2.5;
+
+      if (Math.abs(difference) > 0.08) {
+        p.position.z += Math.sign(difference) * speed * dt;
+        p.position.y = Math.abs(Math.sin(performance.now() * 0.009)) * 0.035;
+      } else {
+        p.position.z = target;
+        p.position.y = 0;
+        p.userData.walking = false;
+
+        if (p.userData.leaving) {
+          S.scene.remove(p);
+          S.people = S.people.filter(item => item !== p);
+        }
+      }
+    }
+
+    S.renderer.render(S.scene, S.camera);
+  }
+
+  async function init3D() {
     try {
       const THREE = await import(
         "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
       );
 
-      state.THREE = THREE;
+      S.THREE = THREE;
 
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xe8eef5);
-      scene.fog = new THREE.Fog(0xe8eef5, 15, 35);
+      const host = $("scene-container");
+      if (!host) throw new Error("scene-container를 찾을 수 없습니다.");
 
-      const width = Math.max(el.scene.clientWidth, 1);
-      const height = Math.max(el.scene.clientHeight, 1);
+      S.scene = new THREE.Scene();
 
-      // 낮은 눈높이 정면 카메라
-      const camera = new THREE.PerspectiveCamera(
+      S.camera = new THREE.PerspectiveCamera(
         43,
-        width / height,
+        host.clientWidth / Math.max(host.clientHeight, 1),
         0.1,
         100
       );
 
-      camera.position.set(0, 1.75, 9);
-      camera.lookAt(0, 1.45, 0);
+      S.camera.position.set(0, 3.4, 13);
+      S.camera.lookAt(0, 2.7, -0.3);
 
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false
-      });
+      S.renderer = new THREE.WebGLRenderer({ antialias:true });
+      S.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      S.renderer.setSize(host.clientWidth, host.clientHeight);
+      S.renderer.shadowMap.enabled = true;
+      S.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      S.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-      renderer.setPixelRatio(
-        Math.min(window.devicePixelRatio || 1, 2)
-      );
+      host.querySelectorAll("canvas").forEach(c => c.remove());
+      host.appendChild(S.renderer.domElement);
 
-      renderer.setSize(width, height);
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      S.clock = new THREE.Clock();
 
-      el.scene.innerHTML = "";
-      el.scene.appendChild(renderer.domElement);
+      createRoom(THREE);
+      createEmployee();
 
-      scene.add(
-        new THREE.HemisphereLight(0xffffff, 0x778899, 2)
-      );
-
-      const light = new THREE.DirectionalLight(0xffffff, 2);
-      light.position.set(-4, 8, 7);
-      light.castShadow = true;
-      scene.add(light);
-
-      // 바닥
-      const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(30, 30),
-        new THREE.MeshStandardMaterial({ color: 0xcbd5df })
-      );
-
-      floor.rotation.x = -Math.PI / 2;
-      floor.position.y = -0.04;
-      floor.receiveShadow = true;
-      scene.add(floor);
-
-      // 뒤쪽 벽
-      const wall = new THREE.Mesh(
-        new THREE.BoxGeometry(18, 6, 0.3),
-        new THREE.MeshStandardMaterial({ color: 0xf5f7fa })
-      );
-
-      wall.position.set(0, 3, -4);
-      scene.add(wall);
-
-      // 창구 앞면
-      const counter = new THREE.Mesh(
-        new THREE.BoxGeometry(7, 1.05, 1.1),
-        new THREE.MeshStandardMaterial({ color: 0x805d43 })
-      );
-
-      counter.position.set(0, 0.55, 0.35);
-      counter.castShadow = true;
-      scene.add(counter);
-
-      const top = new THREE.Mesh(
-        new THREE.BoxGeometry(7.2, 0.12, 1.3),
-        new THREE.MeshStandardMaterial({ color: 0x463326 })
-      );
-
-      top.position.set(0, 1.13, 0.35);
-      scene.add(top);
-
-      // 모니터
-      const monitor = new THREE.Mesh(
-        new THREE.BoxGeometry(1.1, 0.75, 0.12),
-        new THREE.MeshStandardMaterial({ color: 0x222b35 })
-      );
-
-      monitor.position.set(-1.2, 1.72, 0.1);
-      scene.add(monitor);
-
-      const screen = new THREE.Mesh(
-        new THREE.BoxGeometry(0.98, 0.6, 0.02),
-        new THREE.MeshStandardMaterial({
-          color: 0x75b1d8,
-          emissive: 0x163c55
-        })
-      );
-
-      screen.position.set(-1.2, 1.72, 0.03);
-      scene.add(screen);
-
-      // 대기 의자
-      for (let i = 0; i < 4; i++) {
-        const chair = new THREE.Group();
-
-        const seat = new THREE.Mesh(
-          new THREE.BoxGeometry(0.8, 0.15, 0.7),
-          new THREE.MeshStandardMaterial({ color: 0x456b83 })
-        );
-
-        seat.position.y = 0.55;
-        chair.add(seat);
-
-        const back = new THREE.Mesh(
-          new THREE.BoxGeometry(0.8, 0.8, 0.12),
-          new THREE.MeshStandardMaterial({ color: 0x456b83 })
-        );
-
-        back.position.set(0, 0.95, -0.28);
-        chair.add(back);
-
-        chair.position.set(-3.8 + i * 2.4, 0, -2.5);
-        scene.add(chair);
-      }
-
-      state.scene = scene;
-      state.camera = camera;
-      state.renderer = renderer;
-      state.threeReady = true;
-
-      // 이미 대기 중인 고객도 생성
-      state.customers.forEach(customer => {
-        customer.person = createPerson(customer);
-      });
-
-      window.addEventListener("resize", resizeScene);
+      S.queue.forEach(createPersonForCustomer);
 
       animate();
+      resize();
 
-    } catch (error) {
-      console.error("3D 초기화 오류:", error);
-      state.threeReady = false;
-      el.scene.style.background = "#dce5ed";
-      toast("3D 화면을 불러오지 못했습니다. 상담 기능은 이용할 수 있습니다.");
+    } catch (err) {
+      console.error("3D 초기화 실패:", err);
+      message("3D 화면을 불러오지 못했지만 상담 기능은 이용할 수 있어.");
     }
   }
 
-  // ----------------------------------
-  // 사람 캐릭터와 얼굴
-  // ----------------------------------
+  function resize() {
+    const host = $("scene-container");
+    if (!host || !S.camera || !S.renderer) return;
 
-  function createPerson(customer) {
-    const THREE = state.THREE;
-    if (!THREE || !state.scene) return null;
+    const w = host.clientWidth;
+    const h = host.clientHeight;
+    if (!w || !h) return;
 
-    const group = new THREE.Group();
-
-    const skinColors = [
-      0xffd0ae, 0xe8b99a, 0xc58b68,
-      0xf0c9a7, 0xd9a17d
-    ];
-
-    const hairColors = [
-      0x21150f, 0x38251b, 0x171717,
-      0x5b4030, 0x4a3025
-    ];
-
-    const clothesColors = [
-      0x426b91, 0x7c536d, 0x4e6657,
-      0x665d85, 0x9a744e, 0x456d76,
-      0x8a5550
-    ];
-
-    const mat = (color, roughness = 0.85) =>
-      new THREE.MeshStandardMaterial({ color, roughness });
-
-    const skin = mat(skinColors[rand(0, skinColors.length - 1)]);
-    const hair = mat(hairColors[rand(0, hairColors.length - 1)]);
-    const clothes = mat(clothesColors[rand(0, clothesColors.length - 1)]);
-    const dark = mat(0x242424);
-    const eyeWhite = mat(0xffffff);
-    const eyeBlack = mat(0x17120f);
-    const mouthMat = mat(0x8c3e42);
-    const eyebrowMat = mat(0x302018);
-
-    function sphere(x, y, z, sx, sy, sz, material) {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 24, 18),
-        material
-      );
-
-      mesh.position.set(x, y, z);
-      mesh.scale.set(sx, sy, sz);
-      mesh.castShadow = true;
-      group.add(mesh);
-      return mesh;
-    }
-
-    function cube(x, y, z, sx, sy, sz, material) {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(sx, sy, sz),
-        material
-      );
-
-      mesh.position.set(x, y, z);
-      mesh.castShadow = true;
-      group.add(mesh);
-      return mesh;
-    }
-
-    function cylinder(x, y, z, radius, length, material) {
-      const mesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(radius, radius, length, 16),
-        material
-      );
-
-      mesh.position.set(x, y, z);
-      mesh.castShadow = true;
-      group.add(mesh);
-      return mesh;
-    }
-
-    // 몸통
-    cube(0, 1.02, 0, 0.62, 0.82, 0.34, clothes);
-
-    // 목
-    cylinder(0, 1.48, 0, 0.12, 0.2, skin);
-
-    // 얼굴
-    sphere(0, 1.88, 0, 0.32, 0.4, 0.29, skin);
-
-    // 귀
-    sphere(-0.32, 1.89, 0, 0.075, 0.105, 0.07, skin);
-    sphere(0.32, 1.89, 0, 0.075, 0.105, 0.07, skin);
-
-    // 머리카락
-    sphere(0, 2.1, -0.02, 0.34, 0.26, 0.3, hair);
-    sphere(0, 2.19, 0.11, 0.27, 0.12, 0.2, hair);
-
-    // 앞머리 일부
-    sphere(-0.16, 2.1, 0.22, 0.12, 0.12, 0.09, hair);
-    sphere(0.08, 2.13, 0.24, 0.13, 0.1, 0.08, hair);
-
-    // 눈 흰자 - 얼굴 앞쪽(+Z)
-    sphere(-0.115, 1.96, 0.265, 0.065, 0.075, 0.035, eyeWhite);
-    sphere(0.115, 1.96, 0.265, 0.065, 0.075, 0.035, eyeWhite);
-
-    // 검은 눈동자
-    sphere(-0.115, 1.96, 0.298, 0.032, 0.045, 0.018, eyeBlack);
-    sphere(0.115, 1.96, 0.298, 0.032, 0.045, 0.018, eyeBlack);
-
-    // 눈썹
-    const browLeft = cube(
-      -0.115, 2.055, 0.28, 0.13, 0.025, 0.025, eyebrowMat
-    );
-
-    const browRight = cube(
-      0.115, 2.055, 0.28, 0.13, 0.025, 0.025, eyebrowMat
-    );
-
-    browLeft.rotation.z = -0.08;
-    browRight.rotation.z = 0.08;
-
-    // 코
-    sphere(0, 1.875, 0.315, 0.055, 0.075, 0.065, skin);
-
-    // 입 - 얼굴 앞쪽에 배치
-    const mouth = cube(
-      0, 1.765, 0.286, 0.105, 0.025, 0.025, mouthMat
-    );
-
-    // 입술 아래 턱 부분
-    sphere(0, 1.72, 0.25, 0.13, 0.045, 0.06, skin);
-
-    // 팔
-    const leftArm = cube(
-      -0.39, 1.02, 0, 0.16, 0.62, 0.17, clothes
-    );
-
-    const rightArm = cube(
-      0.39, 1.02, 0, 0.16, 0.62, 0.17, clothes
-    );
-
-    leftArm.rotation.z = -0.12;
-    rightArm.rotation.z = 0.12;
-
-    // 손
-    sphere(-0.4, 0.68, 0.03, 0.09, 0.1, 0.09, skin);
-    sphere(0.4, 0.68, 0.03, 0.09, 0.1, 0.09, skin);
-
-    // 다리
-    cube(-0.17, 0.32, 0, 0.2, 0.55, 0.22, dark);
-    cube(0.17, 0.32, 0, 0.2, 0.55, 0.22, dark);
-
-    // 신발
-    sphere(-0.17, 0.06, 0.08, 0.15, 0.08, 0.25, dark);
-    sphere(0.17, 0.06, 0.08, 0.15, 0.08, 0.25, dark);
-
-    // 얼굴이 카메라를 향하도록 회전하지 않음
-    // 얼굴 부품이 +Z 방향이고 카메라도 +Z 방향
-    group.rotation.y = 0;
-
-    group.position.set(
-      rand(-4, 4) * 0.3,
-      0,
-      -2.5
-    );
-
-    group.userData = {
-      walking: false,
-      targetZ: -2.5,
-      onArrive: null,
-      customer
-    };
-
-    state.scene.add(group);
-    state.people.push(group);
-
-    return group;
+    S.camera.aspect = w / h;
+    S.camera.updateProjectionMatrix();
+    S.renderer.setSize(w, h);
   }
 
-  function animate() {
-    if (!state.renderer || !state.scene || !state.camera) return;
+  function startGame() {
+    if (S.started) return;
+    S.started = true;
 
-    requestAnimationFrame(animate);
+    if ($("start-screen")) $("start-screen").style.display = "none";
 
-    const delta = 0.016;
+    for (let i = 0; i < 6; i++) newCustomer();
 
-    state.people.forEach(person => {
-      if (!person.userData.walking) return;
+    init3D();
+    update();
+    message("영업을 시작합니다. 다음 고객 호출을 눌러 주세요.");
 
-      const target = person.userData.targetZ;
-      const difference = target - person.position.z;
-
-      if (Math.abs(difference) > 0.05) {
-        person.position.z +=
-          Math.sign(difference) * delta * 2.2;
-
-        person.position.y =
-          Math.abs(Math.sin(Date.now() * 0.009)) * 0.025;
-
-      } else {
-        person.position.z = target;
-        person.position.y = 0;
-        person.userData.walking = false;
-
-        const callback = person.userData.onArrive;
-        person.userData.onArrive = null;
-
-        if (typeof callback === "function") {
-          callback();
-        }
+    clearInterval(S.timer);
+    S.timer = setInterval(() => {
+      S.minutes++;
+      if (S.minutes >= 1080) {
+        S.minutes = 540;
+        S.day++;
       }
-    });
+      update();
+    }, 2000);
 
-    state.renderer.render(state.scene, state.camera);
+    clearInterval(S.spawn);
+    S.spawn = setInterval(() => {
+      if (S.queue.length < 8) newCustomer();
+    }, 18000);
   }
 
-  function resizeScene() {
-    if (!state.camera || !state.renderer || !el.scene) return;
+  function bind() {
+    if ($("start-button")) {
+      $("start-button").addEventListener("click", startGame);
+    } else {
+      startGame();
+    }
 
-    const width = Math.max(el.scene.clientWidth, 1);
-    const height = Math.max(el.scene.clientHeight, 1);
+    if ($("call-button")) {
+      $("call-button").addEventListener("click", callCustomer);
+    }
 
-    state.camera.aspect = width / height;
-    state.camera.updateProjectionMatrix();
-    state.renderer.setSize(width, height);
+    window.addEventListener("resize", resize);
   }
 
-  // ----------------------------------
-  // 버튼 연결
-  // ----------------------------------
-
-  function main() {
-    if (el.startButton) {
-      el.startButton.addEventListener("click", startGame);
-    }
-
-    if (el.call) {
-      el.call.addEventListener("click", callCustomer);
-      el.call.disabled = false;
-    }
-
-    if (el.finish) {
-      el.finish.addEventListener("click", finishCustomer);
-      el.finish.style.display = "none";
-    }
-
-    if (el.panel) {
-      el.panel.style.display = "none";
-    }
-
-    updateHUD();
-    renderQueue();
-    initializeThree();
+  function init() {
+    style();
+    makeUI();
+    bind();
+    update();
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", main, { once: true });
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    main();
+    init();
   }
-
 })();
