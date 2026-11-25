@@ -1,824 +1,384 @@
 
-
-"use strict";
-
-/* =========================================
-   춘천신협 3D 금융창구
-   전체 게임 코드
-========================================= */
-
-const $ = (id) => document.getElementById(id);
-
 const state = {
   started: false,
+  customers: [],
+  currentCustomer: null,
+  customerNumber: 1,
+  completed: 0,
+  sales: 0,
+  satisfaction: 100,
+  gameHour: 9,
+  gameMinute: 0,
+  currentStep: 0,
+  timer: null,
+  arrivalTimer: null,
   threeReady: false,
   scene: null,
   camera: null,
   renderer: null,
-  THREE: null,
-
-  waiting: [],
-  active: null,
-  leaving: [],
-
-  customerNumber: 0,
-  step: 0,
-  answers: [],
-
-  day: 1,
-  minutes: 540,
-  sales: 0,
-  satisfaction: 100,
-
-  spawnElapsed: 0,
-  lastFrame: 0,
-  toastTimer: null
+  people: [],
+  counterPerson: null,
+  clockStarted: false
 };
 
-const requiredElements = [
-  "scene-container",
-  "start-screen",
-  "start-button",
-  "call-button",
-  "finish-button",
-  "queue-list",
-  "waiting-count",
-  "customer-panel",
-  "customer-name",
-  "customer-number",
-  "customer-info",
-  "step-count",
-  "progress-bar",
-  "customer-message",
-  "answer-list",
-  "feedback",
-  "day",
-  "clock",
-  "sales",
-  "satisfaction",
-  "toast"
-];
+const $ = (id) => document.getElementById(id);
 
-function checkElements() {
-  const missing = requiredElements.filter(id => !$(id));
+const elements = {
+  game: $("game"),
+  startScreen: $("start-screen"),
+  startButton: $("start-button"),
+  day: $("day"),
+  clock: $("clock"),
+  sales: $("sales"),
+  satisfaction: $("satisfaction"),
+  sceneContainer: $("scene-container"),
+  sceneLabel: $("scene-label"),
+  queuePanel: $("queue-panel"),
+  waitingCount: $("waiting-count"),
+  queueList: $("queue-list"),
+  callButton: $("call-button"),
+  customerPanel: $("customer-panel"),
+  customerName: $("customer-name"),
+  customerNumber: $("customer-number"),
+  customerInfo: $("customer-info"),
+  stepCount: $("step-count"),
+  progressBar: $("progress-bar"),
+  customerMessage: $("customer-message"),
+  answerList: $("answer-list"),
+  feedback: $("feedback"),
+  finishButton: $("finish-button"),
+  toast: $("toast")
+};
 
-  if (missing.length) {
-    throw new Error(
-      "HTML에서 다음 요소를 찾을 수 없습니다: " +
-      missing.join(", ")
-    );
-  }
-}
-
-/* =========================================
-   고객 상담 데이터
-========================================= */
-
-const customerCases = [
+// 고객 방문 목적과 상담 내용
+const customerTypes = [
   {
-    purpose: "정기예금",
-    job: "직장인",
-    age: "50대",
-    questions: [
-      {
-        question: "안녕하세요. 예금 만기 자금을 다시 맡기고 싶습니다.",
-        expected: "자금 사용 시기와 예치 기간, 금액을 먼저 확인하겠습니다."
-      },
-      {
-        question: "1년 정도 예치할 생각입니다.",
-        expected: "예치 기간에 따른 금리와 중도해지 조건을 안내하겠습니다."
-      },
-      {
-        question: "금리가 가장 높은 상품으로 하고 싶습니다.",
-        expected: "가입 조건과 우대금리, 실제 적용 금리를 확인하겠습니다."
-      },
-      {
-        question: "출자금도 가입해야 하나요?",
-        expected: "출자금의 성격과 배당 가능성, 환급 제한을 설명하겠습니다."
-      },
-      {
-        question: "예금자보호는 어떻게 되나요?",
-        expected: "현재 예금자보호 제도와 적용 대상 및 한도를 안내하겠습니다."
-      },
-      {
-        question: "배우자 명의로도 가입할 수 있나요?",
-        expected: "명의자 본인 확인과 필요한 거래 절차를 설명하겠습니다."
-      },
-      {
-        question: "세금 혜택도 받을 수 있을까요?",
-        expected: "세제 혜택 대상 자격과 잔여 한도, 적용 기준을 확인하겠습니다."
-      }
+    type: "정기예금",
+    purpose: "목돈 예치 및 금리 상담",
+    intro: "여유자금이 생겨서 정기예금을 알아보러 왔습니다.",
+    amount: "5,000만 원",
+    steps: [
+      ["어떤 목적으로 자금을 예치하시려고 하나요?", ["목돈 운용", "생활자금 보관", "만기자금 재예치"]],
+      ["예치 기간은 어느 정도 생각하고 계신가요?", ["6개월", "1년", "1년 이상"]],
+      ["현재 다른 금융기관에 예치된 자금도 있으신가요?", ["농협", "은행", "다른 신협"]],
+      ["예금자보호에 대해 알고 계신가요?", ["알고 있음", "잘 모름"]],
+      ["세금 혜택도 함께 안내해 드릴까요?", ["저율과세", "일반과세", "출자금"]],
+      ["중도해지 가능성도 고려해야 할까요?", ["중도해지 가능성 있음", "만기까지 유지 가능"]],
+      ["오늘 가입을 진행하시겠습니까?", ["가입 진행", "추가 상담 후 결정"]]
     ]
   },
-
   {
-    purpose: "햇살론",
-    job: "중소기업 근로자",
-    age: "40대",
-    questions: [
-      {
-        question: "생활비가 필요해서 햇살론을 알아보고 있습니다.",
-        expected: "자금 용도와 현재 채무, 필요한 금액을 확인하겠습니다."
-      },
-      {
-        question: "현재 회사에서 근무하고 있습니다.",
-        expected: "재직기간과 건강보험료 등 소득 증빙자료를 확인하겠습니다."
-      },
-      {
-        question: "연봉은 3천만 원 정도입니다.",
-        expected: "소득금액과 소득 증빙자료를 확인하겠습니다."
-      },
-      {
-        question: "카드론이 조금 있습니다.",
-        expected: "기존 대출과 카드론 등 금융기관별 채무 현황을 확인하겠습니다."
-      },
-      {
-        question: "보증은 어디에서 해주는 건가요?",
-        expected: "상품에 따른 보증기관과 보증 심사 조건을 설명하겠습니다."
-      },
-      {
-        question: "한도는 얼마나 나올까요?",
-        expected: "보증기관 심사와 신협 내부 심사 결과에 따라 한도가 결정된다고 안내하겠습니다."
-      },
-      {
-        question: "필요한 서류를 알려주세요.",
-        expected: "신분증과 재직 및 소득 관련 서류를 안내하겠습니다."
-      }
+    type: "예금 재예치",
+    purpose: "만기 예금 재예치",
+    intro: "기존 예금이 만기되어 다시 예치하려고 방문했습니다.",
+    amount: "3,000만 원",
+    steps: [
+      ["기존 예금은 언제 만기되셨나요?", ["오늘 만기", "며칠 전 만기", "다른 금융기관 만기"]],
+      ["만기 자금은 어느 정도인가요?", ["1,000만 원대", "3,000만 원대", "5,000만 원 이상"]],
+      ["이번에도 같은 기간으로 예치하시겠습니까?", ["6개월", "1년", "기간 미정"]],
+      ["다른 금융기관 금리도 비교해 보셨나요?", ["비교함", "아직 비교하지 않음"]],
+      ["저율과세 적용 가능 여부도 확인해 드릴까요?", ["확인 희망", "일반과세 희망"]],
+      ["예금 외에 출자금 운용도 관심 있으신가요?", ["관심 있음", "예금만 희망"]],
+      ["재예치를 진행해 드릴까요?", ["재예치 진행", "추후 결정"]]
     ]
   },
-
   {
-    purpose: "정기적금",
-    job: "회사원",
-    age: "30대",
-    questions: [
-      {
-        question: "매달 100만 원씩 저축하고 싶습니다.",
-        expected: "월 불입 가능 금액과 저축 목적을 확인하겠습니다."
-      },
-      {
-        question: "1년 동안 납입하고 싶습니다.",
-        expected: "가입 기간에 따른 금리와 만기 조건을 안내하겠습니다."
-      },
-      {
-        question: "우대금리를 받을 수 있나요?",
-        expected: "우대금리 조건과 충족 여부를 확인하겠습니다."
-      },
-      {
-        question: "체크카드도 만들고 싶습니다.",
-        expected: "체크카드 발급 조건과 이용 혜택을 설명하겠습니다."
-      },
-      {
-        question: "모바일로 관리하고 싶습니다.",
-        expected: "모바일뱅킹 가입과 이용 방법을 안내하겠습니다."
-      },
-      {
-        question: "자동이체도 설정해 주세요.",
-        expected: "출금 계좌와 이체일, 자동이체 금액을 확인하겠습니다."
-      },
-      {
-        question: "최종 금리를 확인해 주세요.",
-        expected: "가입 당일 금리와 적용되는 우대조건을 확인하겠습니다."
-      }
+    type: "출자금",
+    purpose: "조합원 가입 및 출자금 상담",
+    intro: "신협 조합원 가입과 출자금에 대해 알아보러 왔습니다.",
+    amount: "500만 원",
+    steps: [
+      ["신협 조합원 가입은 처음이신가요?", ["처음입니다", "기존 조합원입니다"]],
+      ["출자금에 대해 알고 계신가요?", ["알고 있습니다", "잘 모릅니다"]],
+      ["출자금은 예금과 차이가 있다는 점을 알고 계신가요?", ["알고 있습니다", "설명이 필요합니다"]],
+      ["출자금 배당에 대해서도 안내해 드릴까요?", ["안내 희망", "괜찮습니다"]],
+      ["출자금의 환급 시기와 절차도 설명해 드릴까요?", ["설명 희망", "알고 있습니다"]],
+      ["조합원 혜택도 함께 안내해 드릴까요?", ["안내 희망", "괜찮습니다"]],
+      ["오늘 조합원 가입을 진행하시겠습니까?", ["가입 진행", "추후 결정"]]
     ]
   },
-
   {
-    purpose: "전세자금대출",
-    job: "직장인",
-    age: "30대",
-    questions: [
-      {
-        question: "전세자금대출을 알아보고 있습니다.",
-        expected: "보증금과 계약 일정, 주택 유형을 확인하겠습니다."
-      },
-      {
-        question: "보증금은 2억 원입니다.",
-        expected: "필요 자금과 본인 자금, 희망 대출 금액을 확인하겠습니다."
-      },
-      {
-        question: "다가구주택에 들어갈 예정입니다.",
-        expected: "등기부등본과 선순위 권리, 임대차 현황을 확인하겠습니다."
-      },
-      {
-        question: "집주인 확인도 필요한가요?",
-        expected: "임대인 정보와 소유권, 임대차계약 내용을 확인하겠습니다."
-      },
-      {
-        question: "연봉은 3천만 원입니다.",
-        expected: "소득 증빙자료와 기존 부채 현황을 확인하겠습니다."
-      },
-      {
-        question: "보증기관 심사가 있나요?",
-        expected: "상품별 보증기관과 보증 심사 조건을 설명하겠습니다."
-      },
-      {
-        question: "언제까지 신청해야 하나요?",
-        expected: "상품별 신청 기한과 계약일, 잔금일을 확인하겠습니다."
-      }
+    type: "정기적금",
+    purpose: "매월 적립식 저축",
+    intro: "매월 일정 금액을 저축하고 싶어서 방문했습니다.",
+    amount: "월 100만 원",
+    steps: [
+      ["매월 얼마 정도 저축할 계획이신가요?", ["30만 원", "50만 원", "100만 원"]],
+      ["저축 기간은 어느 정도 생각하시나요?", ["6개월", "1년", "2년"]],
+      ["월급일에 맞춰 자동이체를 설정해 드릴까요?", ["자동이체 희망", "직접 납입 희망"]],
+      ["적금 금리와 우대 조건을 안내해 드릴까요?", ["안내 희망", "금리 확인 완료"]],
+      ["체크카드나 앱 이용도 함께 도와드릴까요?", ["희망", "필요 없음"]],
+      ["중도해지 시 이율이 달라질 수 있다는 점을 확인하셨나요?", ["확인했습니다", "설명 필요"]],
+      ["오늘 적금 가입을 진행하시겠습니까?", ["가입 진행", "추후 결정"]]
     ]
   },
-
   {
-    purpose: "화재공제",
-    job: "자영업자",
-    age: "50대",
-    questions: [
-      {
-        question: "가게 화재공제를 알아보고 있습니다.",
-        expected: "업종과 건물 구조, 사용 용도 및 시설 현황을 확인하겠습니다."
-      },
-      {
-        question: "건물은 제 소유입니다.",
-        expected: "건물 소유 여부와 구조, 면적 및 사용 용도를 확인하겠습니다."
-      },
-      {
-        question: "집기와 재고도 보장되나요?",
-        expected: "건물과 시설, 집기 및 재고별 보장 가능 여부를 확인하겠습니다."
-      },
-      {
-        question: "기존 보험도 있습니다.",
-        expected: "기존 보험증권과 가입 담보, 보장 금액을 비교하겠습니다."
-      },
-      {
-        question: "화재가 나면 보상받을 수 있나요?",
-        expected: "가입 담보와 보장 범위, 면책 사항을 설명하겠습니다."
-      },
-      {
-        question: "보험료를 줄일 수 있나요?",
-        expected: "필요한 보장과 가입 금액을 검토하겠습니다."
-      },
-      {
-        question: "가입 전에 확인할 사항은요?",
-        expected: "약관과 고지사항, 보장 범위를 꼼꼼하게 확인하겠습니다."
-      }
+    type: "체크카드",
+    purpose: "체크카드 발급 및 계좌 연결",
+    intro: "체크카드를 새로 발급받으려고 왔습니다.",
+    amount: "신규 발급",
+    steps: [
+      ["현재 신협 입출금 계좌를 보유하고 계신가요?", ["보유 중", "계좌 없음"]],
+      ["체크카드는 처음 발급받으시나요?", ["처음입니다", "기존 카드가 있습니다"]],
+      ["주로 어떤 용도로 사용하실 예정인가요?", ["생활비", "교통 및 편의점", "온라인 결제"]],
+      ["카드 이용 실적 조건도 안내해 드릴까요?", ["안내 희망", "괜찮습니다"]],
+      ["모바일뱅킹도 함께 이용하시겠습니까?", ["이용 희망", "카드만 희망"]],
+      ["카드 결제 계좌를 확인해 드릴까요?", ["확인 희망", "이미 확인했습니다"]],
+      ["오늘 카드 발급을 진행하시겠습니까?", ["발급 진행", "추후 결정"]]
     ]
   },
-
   {
-    purpose: "비과세 예금",
-    job: "은퇴자",
-    age: "60대",
-    questions: [
-      {
-        question: "목돈을 예금으로 맡기고 싶습니다.",
-        expected: "예치 금액과 기간, 자금 운용 계획을 확인하겠습니다."
-      },
-      {
-        question: "세금 혜택이 궁금합니다.",
-        expected: "비과세종합저축과 신협 예탁금 관련 세제 혜택을 구분해 설명하겠습니다."
-      },
-      {
-        question: "저도 대상이 될까요?",
-        expected: "세제 혜택 대상 자격과 법령상 요건을 확인하겠습니다."
-      },
-      {
-        question: "다른 은행에서도 가입했습니다.",
-        expected: "기존 가입 내역과 잔여 한도를 확인하겠습니다."
-      },
-      {
-        question: "조합원 가입도 필요한가요?",
-        expected: "조합원 여부와 세제 적용 요건을 구분해 설명하겠습니다."
-      },
-      {
-        question: "일반과세와 차이가 큰가요?",
-        expected: "예치 금액과 기간에 따른 예상 세금을 비교하겠습니다."
-      },
-      {
-        question: "오늘 가입할 수 있나요?",
-        expected: "현재 자격과 잔여 한도, 해당 연도 적용 기준을 확인하겠습니다."
-      }
+    type: "햇살론",
+    purpose: "서민금융 햇살론 상담",
+    intro: "생활자금이 필요해서 햇살론 상담을 받으러 왔습니다.",
+    amount: "1,000만 원",
+    steps: [
+      ["현재 직장에 재직 중이신가요, 사업을 운영 중이신가요?", ["직장인", "사업자", "연금소득자"]],
+      ["현재 근무 또는 사업 기간은 얼마나 되셨나요?", ["3개월 이상", "6개월 이상", "1년 이상"]],
+      ["최근 소득을 확인할 수 있는 자료가 있으신가요?", ["급여명세서", "건강보험료 납부확인서", "소득금액증명"]],
+      ["현재 다른 금융기관 대출도 이용 중이신가요?", ["은행 대출", "카드론 및 현금서비스", "대출 없음"]],
+      ["기존 고금리 대출을 상환하는 목적도 있으신가요?", ["대환 목적", "생활자금 목적"]],
+      ["신용정보 및 보증 심사를 위한 동의 절차를 안내해 드릴까요?", ["동의 절차 진행", "설명 먼저 희망"]],
+      ["필요 서류와 보증 심사 절차를 안내해 드릴까요?", ["안내 희망", "추후 방문"]]
+    ]
+  },
+  {
+    type: "담보대출",
+    purpose: "부동산 담보대출 상담",
+    intro: "부동산을 담보로 대출을 받고 싶어서 방문했습니다.",
+    amount: "1억 원",
+    steps: [
+      ["담보로 제공하실 부동산은 어떤 종류인가요?", ["아파트", "단독주택", "토지", "상가"]],
+      ["부동산은 본인 명의로 되어 있으신가요?", ["본인 명의", "배우자 명의", "공동명의"]],
+      ["필요하신 대출 금액은 얼마인가요?", ["3,000만 원", "5,000만 원", "1억 원 이상"]],
+      ["현재 해당 부동산에 다른 대출이 설정되어 있나요?", ["있습니다", "없습니다", "확인 필요"]],
+      ["소득을 확인할 수 있는 서류가 있으신가요?", ["소득금액증명", "원천징수영수증", "기타 소득자료"]],
+      ["등기부등본과 선순위 권리관계를 확인해도 될까요?", ["확인 희망", "서류 준비 후 방문"]],
+      ["감정평가와 내부 심사 절차를 안내해 드릴까요?", ["안내 희망", "추후 결정"]]
+    ]
+  },
+  {
+    type: "전세자금대출",
+    purpose: "전세자금대출 상담",
+    intro: "전세 계약을 앞두고 대출 상담을 받으러 왔습니다.",
+    amount: "8,000만 원",
+    steps: [
+      ["전세 계약은 이미 체결하셨나요?", ["계약 완료", "계약 예정"]],
+      ["전세 보증금은 얼마인가요?", ["1억 원 이하", "1억~2억 원", "2억 원 이상"]],
+      ["입주 예정일은 언제인가요?", ["1개월 이내", "2개월 이내", "3개월 이후"]],
+      ["현재 무주택 여부를 확인해도 될까요?", ["무주택", "주택 보유", "공동명의 주택"]],
+      ["소득과 재직을 확인할 수 있는 서류가 있으신가요?", ["준비 완료", "준비 중"]],
+      ["보증기관과 보증서 발급 절차를 안내해 드릴까요?", ["안내 희망", "설명 완료"]],
+      ["계약서와 필요 서류를 확인한 뒤 심사를 진행해 드릴까요?", ["심사 준비", "추후 방문"]]
+    ]
+  },
+  {
+    type: "화재공제",
+    purpose: "화재공제 가입 상담",
+    intro: "건물 화재보험에 대해 상담받고 싶습니다.",
+    amount: "건물 보장 상담",
+    steps: [
+      ["공제 가입을 원하시는 대상은 무엇인가요?", ["주택", "상가", "창고", "공장"]],
+      ["건물은 본인 소유인가요, 임차 중인가요?", ["본인 소유", "임차 중"]],
+      ["현재 가입되어 있는 화재보험이 있으신가요?", ["가입 중", "가입 이력 없음"]],
+      ["현재 보험의 보장 내용을 확인해 볼까요?", ["증권 확인 가능", "증권 준비 필요"]],
+      ["화재 외에 풍수재 등 추가 위험도 고려하시나요?", ["필요합니다", "기본 보장 희망"]],
+      ["건물 구조와 면적을 확인해도 될까요?", ["확인 가능", "자료 준비 필요"]],
+      ["기존 계약과 비교해 설계안을 받아보시겠습니까?", ["설계 희망", "추후 결정"]]
+    ]
+  },
+  {
+    type: "상속",
+    purpose: "상속 예금 및 금융거래 상담",
+    intro: "가족이 돌아가셔서 예금 상속 절차를 알아보러 왔습니다.",
+    amount: "상속 예금",
+    steps: [
+      ["고인과 어떤 관계이신가요?", ["배우자", "자녀", "부모", "기타 가족"]],
+      ["상속인은 몇 분 정도 계신가요?", ["1명", "2명", "3명 이상"]],
+      ["상속 관련 서류를 준비하셨나요?", ["준비 완료", "일부 준비", "아직 준비 전"]],
+      ["상속인 전원의 동의 여부를 확인할 수 있을까요?", ["동의 완료", "확인 중"]],
+      ["상속 예금 잔액을 확인해 드릴까요?", ["확인 희망", "이미 확인"]],
+      ["필요한 가족관계 및 기본증명서 등을 안내해 드릴까요?", ["안내 희망", "알고 있습니다"]],
+      ["서류 확인 후 지급 절차를 안내해 드릴까요?", ["진행 희망", "추후 방문"]]
+    ]
+  },
+  {
+    type: "대출 연장",
+    purpose: "기존 대출 만기 연장 상담",
+    intro: "기존에 이용 중인 대출의 만기가 다가와서 방문했습니다.",
+    amount: "기존 대출",
+    steps: [
+      ["현재 이용 중인 대출의 만기일은 언제인가요?", ["1개월 이내", "2개월 이내", "3개월 이후"]],
+      ["현재 대출 원금은 어느 정도 남아 있나요?", ["3,000만 원 이하", "5,000만 원 이하", "5,000만 원 이상"]],
+      ["최근 소득이나 재직 상태에 변동이 있으신가요?", ["변동 없음", "소득 증가", "소득 감소", "직장 변경"]],
+      ["최근 다른 금융기관 대출이 추가되었나요?", ["추가 대출 있음", "없음"]],
+      ["이자 납입은 정상적으로 이루어지고 있나요?", ["정상 납입", "연체 이력 있음"]],
+      ["일부 원금 상환도 고려하고 계신가요?", ["상환 가능", "연장 희망"]],
+      ["필요 서류와 연장 심사 절차를 안내해 드릴까요?", ["안내 희망", "추후 방문"]]
     ]
   }
 ];
 
-const customerNames = [
-  "김영숙", "박정호", "이선희", "최민수",
-  "정미경", "강현우", "윤정자", "한지훈",
-  "서영희", "임성호", "조은정", "오상철",
-  "배정희", "문성진", "신미자", "장현수",
-  "이명희", "김성호", "박은정", "최영수"
+const names = [
+  "김영숙", "박정희", "이정훈", "최민수", "한미경",
+  "윤선미", "김남국", "강민호", "오정희", "서영자",
+  "장현수", "임수진", "조성호", "문정희", "백승철",
+  "신영자", "차재필", "이경희", "전우진", "송미란",
+  "남진우", "최영희", "박창순", "김한수", "정태용"
 ];
 
-const avatarList = ["👨", "👩", "👨‍🦳", "👩‍🦳"];
-
-/* =========================================
-   알림
-========================================= */
+const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 function showToast(message) {
-  const toast = $("toast");
+  if (!elements.toast) return;
 
-  toast.textContent = message;
-  toast.classList.add("show");
+  elements.toast.textContent = message;
+  elements.toast.classList.add("show");
 
-  clearTimeout(state.toastTimer);
-
-  state.toastTimer = setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2300);
+  clearTimeout(showToast.timeout);
+  showToast.timeout = setTimeout(() => {
+    elements.toast.classList.remove("show");
+  }, 2500);
 }
-
-/* =========================================
-   화면 정보
-========================================= */
 
 function updateHUD() {
-  const hour = Math.floor(state.minutes / 60);
-  const minute = Math.floor(state.minutes % 60);
+  if (elements.clock) {
+    elements.clock.textContent =
+      `${String(state.gameHour).padStart(2, "0")}:${String(state.gameMinute).padStart(2, "0")}`;
+  }
 
-  $("day").textContent = `${state.day}일차`;
+  if (elements.sales) {
+    elements.sales.textContent = state.sales.toLocaleString("ko-KR");
+  }
 
-  $("clock").textContent =
-    String(hour).padStart(2, "0") + ":" +
-    String(minute).padStart(2, "0");
+  if (elements.satisfaction) {
+    elements.satisfaction.textContent = `${state.satisfaction}%`;
+  }
 
-  $("sales").textContent =
-    state.sales.toLocaleString("ko-KR") + "원";
-
-  $("satisfaction").textContent =
-    state.satisfaction + "%";
-}
-
-/* =========================================
-   대기열
-========================================= */
-
-function renderQueue() {
-  const list = $("queue-list");
-
-  list.innerHTML = "";
-
-  $("waiting-count").textContent =
-    state.waiting.length + "명";
-
-  state.waiting.forEach((customer, index) => {
-    const item = document.createElement("div");
-    item.className = "queue-item";
-
-    const avatar = document.createElement("div");
-    avatar.className = "queue-avatar";
-    avatar.textContent = customer.avatar;
-
-    const detail = document.createElement("div");
-    detail.className = "queue-detail";
-
-    const name = document.createElement("strong");
-    name.textContent = customer.name;
-
-    const purpose = document.createElement("small");
-    purpose.textContent = customer.data.purpose;
-
-    detail.append(name, purpose);
-
-    const number = document.createElement("span");
-    number.className = "queue-number";
-    number.textContent = `${index + 1}번`;
-
-    item.append(avatar, detail, number);
-    list.appendChild(item);
-  });
-
-  $("call-button").disabled =
-    !state.started ||
-    !!state.active ||
-    state.waiting.length === 0;
-}
-
-/* =========================================
-   3D 초기화
-========================================= */
-
-async function initializeThree() {
-  try {
-    const THREE = await import(
-      "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-    );
-
-    state.THREE = THREE;
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xd9e8eb);
-    scene.fog = new THREE.Fog(0xd9e8eb, 20, 38);
-
-    const camera = new THREE.PerspectiveCamera(
-      48,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      100
-    );
-
-    camera.position.set(0, 5.2, 13);
-    camera.lookAt(0, 1.5, -2);
-
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false
-    });
-
-    renderer.setSize(
-      window.innerWidth,
-      window.innerHeight
-    );
-
-    renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, 1.5)
-    );
-
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    renderer.shadowMap.enabled = false;
-
-    const container = $("scene-container");
-    container.innerHTML = "";
-    container.appendChild(renderer.domElement);
-
-    scene.add(
-      new THREE.HemisphereLight(
-        0xffffff,
-        0x84959c,
-        2.1
-      )
-    );
-
-    const light = new THREE.DirectionalLight(
-      0xffffff,
-      1.8
-    );
-
-    light.position.set(-5, 10, 8);
-    scene.add(light);
-
-    state.scene = scene;
-    state.camera = camera;
-    state.renderer = renderer;
-    state.threeReady = true;
-
-    buildBank();
-    animate();
-
-    showToast("3D 금융창구 준비 완료");
-
-  } catch (error) {
-    console.error("3D 초기화 실패:", error);
-
-    state.threeReady = false;
-
-    $("scene-container").style.background =
-      "linear-gradient(#d9e8eb, #b9d0d1)";
-
-    showToast(
-      "3D 화면을 불러오지 못했습니다. 상담 기능은 계속 이용할 수 있습니다."
-    );
+  if (elements.waitingCount) {
+    elements.waitingCount.textContent = state.customers.length;
   }
 }
 
-/* =========================================
-   3D 도형 함수
-========================================= */
+function advanceClock() {
+  state.gameMinute++;
 
-function makeMaterial(color) {
-  return new state.THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.85
-  });
-}
-
-function makeCube(
-  parent,
-  x, y, z,
-  sx, sy, sz,
-  color
-) {
-  const THREE = state.THREE;
-
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(sx, sy, sz),
-    makeMaterial(color)
-  );
-
-  mesh.position.set(x, y, z);
-  parent.add(mesh);
-
-  return mesh;
-}
-
-function makeBall(
-  parent,
-  x, y, z,
-  sx, sy, sz,
-  color
-) {
-  const THREE = state.THREE;
-
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 16, 12),
-    makeMaterial(color)
-  );
-
-  mesh.position.set(x, y, z);
-  mesh.scale.set(sx, sy, sz);
-  parent.add(mesh);
-
-  return mesh;
-}
-
-function makeCapsule(
-  parent,
-  x, y, z,
-  radius,
-  length,
-  color
-) {
-  const THREE = state.THREE;
-
-  const mesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(radius, length, 4, 8),
-    makeMaterial(color)
-  );
-
-  mesh.position.set(x, y, z);
-  parent.add(mesh);
-
-  return mesh;
-}
-
-/* =========================================
-   은행 인테리어
-========================================= */
-
-function buildBank() {
-  const scene = state.scene;
-
-  makeCube(scene, 0, -0.2, -2, 19, 0.4, 21, 0xd7d5ce);
-  makeCube(scene, 0, 3, -12, 19, 6, 0.3, 0xe8efec);
-
-  makeCube(scene, -9.5, 3, -2, 0.3, 6, 20, 0xe8efec);
-  makeCube(scene, 9.5, 3, -2, 0.3, 6, 20, 0xe8efec);
-
-  makeCube(scene, 0, 6.2, -2, 19, 0.3, 21, 0xf5f7f4);
-
-  // 창문
-  makeCube(scene, -5.4, 3.1, -11.78, 5, 2.2, 0.08, 0x8fbecb);
-
-  // 벽 장식
-  makeCube(scene, 4.5, 3, -11.7, 5, 3.5, 0xd3e6dd);
-
-  // 간판
-  makeCube(scene, 0, 5, -11.55, 5.5, 0.8, 0.2, 0x087b68);
-
-  // 창구
-  makeCube(scene, 0, 1.05, 2, 9, 1.15, 1, 0x947052);
-  makeCube(scene, 0, 1.65, 2, 9.2, 0.14, 1.1, 0x65452f);
-
-  // 모니터
-  makeCube(scene, -2, 2.25, 1.65, 1.25, 0.9, 0.12, 0x293a48);
-  makeCube(scene, -2, 2.25, 1.57, 1.12, 0.72, 0x9ec8cf);
-  makeCube(scene, -2, 1.75, 1.65, 0.16, 0.25, 0x465763);
-
-  // 키보드
-  makeCube(scene, -0.4, 1.76, 2, 1.2, 0.06, 0.38, 0x29343d);
-
-  // 창구 번호판
-  makeCube(scene, 3.1, 2.05, 1.65, 1.1, 0.6, 0.15, 0x087b68);
-
-  // 대기석
-  const positions = [
-    [-5.5, -3], [-3.3, -3], [-1.1, -3],
-    [1.1, -3], [3.3, -3], [5.5, -3],
-    [-5.5, -6], [-3.3, -6], [-1.1, -6],
-    [1.1, -6], [3.3, -6], [5.5, -6]
-  ];
-
-  positions.forEach(([x, z]) => makeChair(x, z));
-}
-
-function makeChair(x, z) {
-  const group = new state.THREE.Group();
-
-  makeCube(group, 0, 0.65, 0, 0.85, 0.15, 0.8, 0x567989);
-  makeCube(group, 0, 1.1, -0.32, 0.85, 0.9, 0.12, 0x567989);
-
-  for (const dx of [-0.32, 0.32]) {
-    for (const dz of [-0.25, 0.25]) {
-      const leg = new state.THREE.Mesh(
-        new state.THREE.CylinderGeometry(
-          0.045, 0.045, 0.6, 10
-        ),
-        makeMaterial(0x525b60)
-      );
-
-      leg.position.set(dx, 0.3, dz);
-      group.add(leg);
-    }
+  if (state.gameMinute >= 60) {
+    state.gameMinute = 0;
+    state.gameHour++;
   }
 
-  group.position.set(x, 0, z);
-  state.scene.add(group);
+  if (state.gameHour >= 18) {
+    state.gameHour = 9;
+  }
+
+  updateHUD();
 }
-
-/* =========================================
-   캐릭터
-========================================= */
-
-const skinColors = [
-  0xf2c8a5, 0xe0ae8c, 0xc98e6d,
-  0xf4d1b0, 0xd5a17d, 0xe9b995
-];
-
-const hairColors = [
-  0x211b19, 0x493326, 0x171717,
-  0x826348, 0xaaa09a, 0x3b2922
-];
-
-const clothesColors = [
-  0x315578, 0x785879, 0x548174,
-  0x9a674d, 0x435b70, 0x8586a5
-];
-
-function createPerson(index, seated = true) {
-  if (!state.threeReady) return null;
-
-  const group = new state.THREE.Group();
-
-  const skin = skinColors[index % skinColors.length];
-  const hair = hairColors[index % hairColors.length];
-  const clothes = clothesColors[index % clothesColors.length];
-
-  makeCapsule(
-    group, 0, 1, 0,
-    0.36, 0.55, clothes
-  );
-
-  const headY = seated ? 1.83 : 1.95;
-
-  makeBall(group, 0, 1.48, 0, 0.13, 0.13, 0.13, skin);
-  makeBall(group, 0, headY, 0, 0.43, 0.53, 0.39, skin);
-
-  // 귀
-  makeBall(group, -0.42, headY, 0, 0.09, 0.15, 0.09, skin);
-  makeBall(group, 0.42, headY, 0, 0.09, 0.15, 0.09, skin);
-
-  // 머리카락
-  makeBall(group, 0, headY + 0.28, -0.02, 0.45, 0.32, 0.41, hair);
-
-  // 앞머리
-  makeBall(group, 0, headY + 0.14, 0.3, 0.42, 0.16, 0.14, hair);
-
-  // 눈
-  for (const x of [-0.16, 0.16]) {
-    makeBall(group, x, headY + 0.03, 0.35, 0.075, 0.085, 0.035, 0xffffff);
-    makeBall(group, x, headY + 0.03, 0.382, 0.035, 0.05, 0.02, 0x222222);
-  }
-
-  // 코와 입
-  makeBall(group, 0, headY - 0.09, 0.39, 0.075, 0.11, 0.08, skin);
-  makeBall(group, 0, headY - 0.24, 0.36, 0.13, 0.035, 0.025, 0x984e50);
-
-  // 팔
-  for (const side of [-1, 1]) {
-    const arm = makeCapsule(
-      group,
-      side * 0.43,
-      1,
-      0,
-      0.12,
-      0.48,
-      clothes
-    );
-
-    arm.rotation.z = side * -0.2;
-
-    makeBall(
-      group,
-      side * 0.44,
-      0.68,
-      0.04,
-      0.13,
-      0.13,
-      0.13,
-      skin
-    );
-  }
-
-  // 다리
-  if (seated) {
-    for (const side of [-1, 1]) {
-      const leg = makeCapsule(
-        group,
-        side * 0.2,
-        0.48,
-        0.25,
-        0.15,
-        0.42,
-        0x303a48
-      );
-
-      leg.rotation.x = Math.PI / 2.8;
-
-      makeCube(
-        group,
-        side * 0.2,
-        0.22,
-        0.55,
-        0.25,
-        0.13,
-        0.45,
-        0x252b31
-      );
-    }
-  } else {
-    for (const side of [-1, 1]) {
-      makeCapsule(
-        group,
-        side * 0.2,
-        0.37,
-        0,
-        0.15,
-        0.55,
-        0x303a48
-      );
-
-      makeCube(
-        group,
-        side * 0.2,
-        0.08,
-        0.08,
-        0.28,
-        0.13,
-        0.45,
-        0x252b31
-      );
-    }
-  }
-
-  return group;
-}
-
-/* =========================================
-   고객 생성
-========================================= */
 
 function createCustomer() {
-  state.customerNumber++;
+  const template = customerTypes[random(0, customerTypes.length - 1)];
+  const name = names[random(0, names.length - 1)];
 
-  const id = state.customerNumber;
-
-  const data =
-    customerCases[
-      Math.floor(Math.random() * customerCases.length)
-    ];
-
-  const name =
-    customerNames[
-      Math.floor(Math.random() * customerNames.length)
-    ];
-
-  const seatIndex = (id - 1) % 12;
-
-  const seatPositions = [
-    [-5.5, -3], [-3.3, -3], [-1.1, -3],
-    [1.1, -3], [3.3, -3], [5.5, -3],
-    [-5.5, -6], [-3.3, -6], [-1.1, -6],
-    [1.1, -6], [3.3, -6], [5.5, -6]
-  ];
-
-  const [x, z] = seatPositions[seatIndex];
-
-  const customer = {
-    id,
+  return {
+    id: state.customerNumber++,
     name,
-    data,
-    avatar: avatarList[Math.floor(Math.random() * avatarList.length)],
-    x,
-    z,
-    targetX: x,
-    targetZ: z,
+    type: template.type,
+    purpose: template.purpose,
+    intro: template.intro,
+    amount: template.amount,
+    steps: template.steps,
+    satisfaction: random(75, 100),
     person: null,
-    status: "waiting"
+    position: 0
   };
-
-  customer.person = createPerson(id, true);
-
-  if (customer.person) {
-    customer.person.position.set(x, 0, z);
-    state.scene.add(customer.person);
-  }
-
-  return customer;
 }
 
 function addCustomer() {
-  if (state.waiting.length >= 10) return;
+  const customer = createCustomer();
 
-  state.waiting.push(createCustomer());
+  state.customers.push(customer);
+
+  if (state.threeReady) {
+    customer.person = createPerson(customer);
+    if (customer.person) {
+      customer.person.position.set(random(-5, 5) * 0.2, 0, -2.5);
+    }
+  }
 
   renderQueue();
+  updateHUD();
 }
 
-/* =========================================
-   고객 호출
-========================================= */
+function renderQueue() {
+  if (!elements.queueList) return;
+
+  elements.queueList.innerHTML = "";
+
+  if (state.customers.length === 0) {
+    elements.queueList.innerHTML =
+      '<div class="queue-empty">대기 중인 고객이 없습니다.</div>';
+    return;
+  }
+
+  state.customers.slice(0, 6).forEach((customer, index) => {
+    const item = document.createElement("div");
+    item.className = "queue-item";
+    item.innerHTML = `
+      <span class="queue-number">${index + 1}</span>
+      <span class="queue-customer">${customer.name}</span>
+      <span class="queue-purpose">${customer.type}</span>
+    `;
+    elements.queueList.appendChild(item);
+  });
+}
+
+function connectButtons() {
+  if (elements.startButton) {
+    elements.startButton.addEventListener("click", startGame);
+  }
+
+  if (elements.callButton) {
+    elements.callButton.addEventListener("click", callCustomer);
+  }
+
+  if (elements.finishButton) {
+    elements.finishButton.addEventListener("click", finishCustomer);
+  }
+}
+
+function startGame() {
+  if (state.started) return;
+
+  state.started = true;
+
+  if (elements.startScreen) {
+    elements.startScreen.style.display = "none";
+  }
+
+  if (elements.customerPanel) {
+    elements.customerPanel.style.display = "none";
+  }
+
+  for (let i = 0; i < 6; i++) {
+    addCustomer();
+  }
+
+  state.timer = setInterval(advanceClock, 2000);
+  state.arrivalTimer = setInterval(() => {
+    if (state.customers.length < 12) {
+      addCustomer();
+      showToast("새로운 고객이 방문했습니다.");
+    }
+  }, 15000);
+
+  if (elements.callButton) {
+    elements.callButton.disabled = false;
+  }
+
+  updateHUD();
+  renderQueue();
+  showToast("영업을 시작했습니다. 번호표를 호출해 주세요.");
+}
 
 function callCustomer() {
   if (!state.started) {
@@ -826,1799 +386,665 @@ function callCustomer() {
     return;
   }
 
-  if (state.active) {
-    showToast("현재 고객 상담을 먼저 완료해 주세요.");
+  if (state.currentCustomer) {
+    showToast("현재 고객의 상담을 먼저 완료해 주세요.");
     return;
   }
 
-  if (state.waiting.length === 0) {
-    showToast("대기 고객이 없습니다.");
+  if (state.customers.length === 0) {
+    showToast("대기 중인 고객이 없습니다.");
     return;
   }
 
-  const customer = state.waiting.shift();
-
-  state.active = customer;
-  state.step = 0;
-  state.answers = [];
-
-  if (customer.person && state.scene) {
-    state.scene.remove(customer.person);
-
-    customer.person = createPerson(customer.id, false);
-
-    if (customer.person) {
-      customer.person.position.set(customer.x, 0, customer.z);
-      state.scene.add(customer.person);
-    }
-  }
-
-  customer.targetX = 0;
-  customer.targetZ = 0.1;
-  customer.status = "walking";
-
-  $("customer-panel").classList.remove("hidden");
-
-  $("customer-name").textContent = customer.name;
-  $("customer-number").textContent = customer.id + "번";
-
-  $("customer-info").innerHTML = "";
-
-  [
-    customer.data.age,
-    customer.data.job,
-    customer.data.purpose
-  ].forEach(value => {
-    const tag = document.createElement("span");
-    tag.className = "info-tag";
-    tag.textContent = value;
-    $("customer-info").appendChild(tag);
-  });
-
-  $("customer-message").textContent =
-    "고객이 창구 앞으로 이동하고 있습니다.";
-
-  $("answer-list").innerHTML = "";
-  $("feedback").textContent = "";
-
-  $("finish-button").classList.add("hidden");
+  const customer = state.customers.shift();
+  state.currentCustomer = customer;
+  state.currentStep = 0;
 
   renderQueue();
+  updateHUD();
 
-  if (!state.threeReady) {
-    customer.status = "consulting";
+  if (elements.callButton) {
+    elements.callButton.disabled = true;
+  }
+
+  showToast(`${customer.name} 고객님을 호출했습니다.`);
+
+  if (customer.person && state.threeReady) {
+    customer.person.userData.targetZ = 2.5;
+    customer.person.userData.walking = true;
+    customer.person.userData.onArrive = () => showQuestion();
+  } else {
     showQuestion();
   }
-
-  showToast(customer.name + " 고객 호출");
 }
-
-/* =========================================
-   고객 이동
-========================================= */
-
-function updateMovement(delta) {
-  const customer = state.active;
-
-  if (
-    !customer ||
-    customer.status !== "walking" ||
-    !customer.person
-  ) {
-    return;
-  }
-
-  const person = customer.person;
-
-  const dx = customer.targetX - person.position.x;
-  const dz = customer.targetZ - person.position.z;
-
-  const distance = Math.sqrt(dx * dx + dz * dz);
-
-  if (distance < 0.12) {
-    person.position.set(
-      customer.targetX,
-      0,
-      customer.targetZ
-    );
-
-    customer.status = "consulting";
-
-    showQuestion();
-    return;
-  }
-
-  const amount = Math.min(delta * 1.7, distance);
-
-  person.position.x += dx / distance * amount;
-  person.position.z += dz / distance * amount;
-
-  person.rotation.y = Math.atan2(dx, dz);
-
-  person.position.y =
-    Math.abs(Math.sin(performance.now() * 0.008)) * 0.04;
-}
-
-/* =========================================
-   답변 평가
-========================================= */
-
-const synonyms = {
-  자금: ["자금", "금액", "돈", "목돈"],
-  사용: ["사용", "필요", "지출", "쓸"],
-  시기: ["시기", "언제", "예정", "계획"],
-  기간: ["기간", "개월", "년", "만기"],
-  금리: ["금리", "이율", "이자"],
-  조건: ["조건", "요건", "기준"],
-  중도해지: ["중도해지", "중도 해지", "해지"],
-  출자금: ["출자금", "출자", "조합원"],
-  배당: ["배당", "배당금"],
-  환급: ["환급", "반환"],
-  보호: ["보호", "예금자보호", "보호한도"],
-  한도: ["한도", "잔여"],
-  본인: ["본인", "명의자", "신분증"],
-  세금: ["세금", "과세", "비과세", "세제"],
-  자격: ["자격", "대상"],
-  소득: ["소득", "연봉", "급여"],
-  재직: ["재직", "근무", "직장"],
-  증빙: ["증빙", "서류", "확인서", "증명서"],
-  채무: ["채무", "부채", "대출", "카드론"],
-  금융기관: ["금융기관", "은행", "카드사"],
-  보증: ["보증", "보증기관", "보증서"],
-  심사: ["심사", "승인", "검토"],
-  용도: ["용도", "생활비", "사업자금", "목적"],
-  보증금: ["보증금", "전세금", "임차보증금"],
-  주택: ["주택", "다가구", "다세대", "아파트"],
-  계약: ["계약", "임대차", "계약서"],
-  등기: ["등기", "등기부", "등기사항"],
-  선순위: ["선순위", "근저당", "권리관계"],
-  임대인: ["임대인", "집주인", "소유자"],
-  기한: ["기한", "신청일", "잔금일", "실행일"],
-  업종: ["업종", "영업", "사업"],
-  시설: ["시설", "집기", "재고", "비품"],
-  건물: ["건물", "구조", "면적"],
-  담보: ["담보", "보장", "특약"],
-  보험: ["보험", "보험증권", "가입내역"],
-  면책: ["면책", "보상 제외", "보상제외"],
-  약관: ["약관", "고지", "고지사항"],
-  비교: ["비교", "차이", "계산", "예상"],
-  자동이체: ["자동이체", "이체일", "출금계좌"],
-  모바일: ["모바일", "온뱅크", "앱", "어플"],
-  카드: ["체크카드", "카드발급", "카드 혜택"]
-};
-
-function normalize(text) {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/\s/g, "")
-    .replace(/[.,!?~'"“”‘’·:;()\-]/g, "");
-}
-
-function evaluateAnswer(answer, expected) {
-  const normalizedAnswer = normalize(answer);
-  const normalizedExpected = normalize(expected);
-
-  let matched = 0;
-  let total = 0;
-
-  for (const [key, words] of Object.entries(synonyms)) {
-    const belongs = words.some(word =>
-      normalizedExpected.includes(normalize(word))
-    );
-
-    if (!belongs) continue;
-
-    total++;
-
-    if (
-      words.some(word =>
-        normalizedAnswer.includes(normalize(word))
-      )
-    ) {
-      matched++;
-    }
-  }
-
-  if (total === 0) {
-    return Math.min(100, 40 + answer.length);
-  }
-
-  const coverage = matched / total;
-
-  const detailBonus =
-    answer.length >= 70 ? 15 :
-    answer.length >= 35 ? 10 : 0;
-
-  return Math.min(
-    100,
-    Math.round(coverage * 85 + detailBonus)
-  );
-}
-
-/* =========================================
-   상담 질문
-========================================= */
 
 function showQuestion() {
-  const customer = state.active;
-
+  const customer = state.currentCustomer;
   if (!customer) return;
 
-  const question = customer.data.questions[state.step];
+  if (elements.customerPanel) {
+    elements.customerPanel.style.display = "block";
+  }
 
-  $("step-count").textContent =
-    `${state.step + 1} / 7`;
+  if (elements.customerName) {
+    elements.customerName.textContent = customer.name;
+  }
 
-  $("progress-bar").style.width =
-    `${((state.step + 1) / 7) * 100}%`;
+  if (elements.customerNumber) {
+    elements.customerNumber.textContent = `대기번호 ${customer.id}`;
+  }
 
-  $("customer-message").textContent =
-    question.question;
+  if (elements.customerInfo) {
+    elements.customerInfo.textContent =
+      `${customer.type} · ${customer.purpose} · 상담금액 ${customer.amount}`;
+  }
 
-  $("answer-list").innerHTML = "";
-  $("feedback").textContent = "";
+  if (elements.customerMessage) {
+    elements.customerMessage.textContent =
+      `안녕하세요. ${customer.intro} 잘 부탁드립니다.`;
+  }
+
+  renderQuestion();
+}
+
+function renderQuestion() {
+  const customer = state.currentCustomer;
+  if (!customer) return;
+
+  const total = customer.steps.length;
+  const step = customer.steps[state.currentStep];
+
+  if (elements.stepCount) {
+    elements.stepCount.textContent = `${state.currentStep + 1} / ${total}`;
+  }
+
+  if (elements.progressBar) {
+    elements.progressBar.style.width =
+      `${((state.currentStep + 1) / total) * 100}%`;
+  }
+
+  if (elements.customerMessage) {
+    elements.customerMessage.textContent = step[0];
+  }
+
+  if (elements.feedback) {
+    elements.feedback.textContent = "";
+    elements.feedback.style.display = "none";
+  }
+
+  if (elements.finishButton) {
+    elements.finishButton.style.display = "none";
+  }
+
+  if (!elements.answerList) return;
+
+  elements.answerList.innerHTML = "";
 
   const wrapper = document.createElement("div");
-  wrapper.className = "written-answer-area";
+  wrapper.className = "subjective-answer";
 
   const label = document.createElement("label");
-  label.textContent = "직원 답변을 직접 작성해 주세요.";
+  label.textContent = "직원 상담 답변을 입력해 주세요.";
+  label.style.display = "block";
+  label.style.marginBottom = "8px";
 
   const textarea = document.createElement("textarea");
-  textarea.id = "written-answer";
+  textarea.id = "customer-answer";
   textarea.placeholder =
-    "고객님께 실제로 설명하듯 답변을 작성해 주세요.";
+    "고객에게 설명할 내용을 직접 입력하세요. 예: 고객님의 상황을 먼저 확인한 뒤 필요한 서류와 조건을 안내해 드리겠습니다.";
+  textarea.rows = 4;
+  textarea.style.width = "100%";
+  textarea.style.boxSizing = "border-box";
+  textarea.style.padding = "12px";
+  textarea.style.borderRadius = "10px";
+  textarea.style.border = "1px solid #ccc";
+  textarea.style.resize = "vertical";
+  textarea.style.fontSize = "14px";
 
-  const hint = document.createElement("p");
-  hint.className = "answer-hint";
-  hint.textContent =
-    "구체적인 안내 내용을 작성하면 더 높은 평가를 받을 수 있습니다.";
+  const submit = document.createElement("button");
+  submit.type = "button";
+  submit.textContent = "답변 제출";
+  submit.style.marginTop = "10px";
+  submit.addEventListener("click", submitAnswer);
 
-  const button = document.createElement("button");
-  button.className = "primary-button";
-  button.textContent = "답변 제출하기";
-
-  button.addEventListener("click", submitAnswer);
-
-  wrapper.append(label, textarea, hint, button);
-
-  $("answer-list").appendChild(wrapper);
-
-  textarea.addEventListener("keydown", event => {
-    if (
-      event.key === "Enter" &&
-      (event.ctrlKey || event.metaKey)
-    ) {
-      event.preventDefault();
-      submitAnswer();
-    }
-  });
+  wrapper.append(label, textarea, submit);
+  elements.answerList.appendChild(wrapper);
 
   textarea.focus();
 }
 
-/* =========================================
-   답변 제출
-========================================= */
-
 function submitAnswer() {
-  if (!state.active) return;
+  const textarea = $("customer-answer");
+  const answer = textarea ? textarea.value.trim() : "";
 
-  const textarea = $("written-answer");
-
-  if (!textarea) return;
-
-  const answer = textarea.value.trim();
-
-  if (answer.length < 8) {
-    showToast("답변을 조금 더 자세히 작성해 주세요.");
-    textarea.focus();
+  if (!answer) {
+    showToast("답변을 입력해 주세요.");
     return;
   }
 
-  const question =
-    state.active.data.questions[state.step];
-
-  const score = evaluateAnswer(
-    answer,
-    question.expected
-  );
-
-  state.answers.push(score);
-
-  if (score >= 80) {
-    state.satisfaction = Math.min(
-      100,
-      state.satisfaction + 2
-    );
-  } else if (score < 50) {
-    state.satisfaction = Math.max(
-      0,
-      state.satisfaction - 2
-    );
+  if (answer.length < 8) {
+    showToast("조금 더 구체적으로 답변해 주세요.");
+    return;
   }
 
-  updateHUD();
+  const customer = state.currentCustomer;
+  if (!customer) return;
 
-  $("answer-list").innerHTML = "";
+  const keywords = [
+    "확인", "안내", "설명", "서류", "조건", "금리",
+    "소득", "기간", "상환", "심사", "보증", "동의",
+    "고객", "상담", "필요", "가능", "확인해", "비교"
+  ];
 
-  const review = document.createElement("div");
-  review.className = "review-box";
+  const matched = keywords.filter(word => answer.includes(word)).length;
+  let score = 65 + Math.min(25, matched * 5);
 
-  const title = document.createElement("h3");
-  title.textContent = `답변 평가 ${score}점`;
+  if (answer.length >= 40) score += 5;
+  if (answer.length >= 80) score += 5;
 
-  const message = document.createElement("p");
-  message.textContent =
-    score >= 80
-      ? "좋은 답변입니다. 고객의 질문에 필요한 내용을 잘 안내했습니다."
-      : score >= 55
-        ? "기본적인 설명은 했습니다. 핵심 내용을 조금 더 보완해 보세요."
-        : "설명이 부족합니다. 고객의 상황과 관련 기준을 구체적으로 안내해 보세요.";
+  score = Math.min(100, score);
 
-  const expected = document.createElement("p");
-  expected.textContent =
-    "상담 참고사항: " + question.expected;
-
-  review.append(title, message, expected);
-
-  $("answer-list").appendChild(review);
-
-  const nextButton = document.createElement("button");
-  nextButton.className = "primary-button";
-  nextButton.style.marginTop = "12px";
-
-  if (state.step < 6) {
-    nextButton.textContent = "다음 질문 진행";
-
-    nextButton.addEventListener("click", () => {
-      state.step++;
-      showQuestion();
-    });
-  } else {
-    nextButton.textContent = "최종 상담 평가";
-
-    nextButton.addEventListener("click", showFinalReview);
-  }
-
-  $("answer-list").appendChild(nextButton);
-}
-
-/* =========================================
-   최종 평가
-========================================= */
-
-function showFinalReview() {
-  if (!state.active) return;
-
-  const scores = state.answers;
-
-  const average = Math.round(
-    scores.reduce((sum, score) => sum + score, 0) /
-    Math.max(scores.length, 1)
+  customer.satisfaction = Math.round(
+    (customer.satisfaction + score) / 2
   );
 
-  $("customer-message").textContent =
-    "상담이 모두 끝났습니다. 최종 평가를 확인해 주세요.";
-
-  $("answer-list").innerHTML = "";
-
-  const review = document.createElement("div");
-  review.className = "review-box";
-
-  const title = document.createElement("h3");
-  title.textContent = "상담 종합 평가";
-
-  const averageText = document.createElement("p");
-  averageText.textContent =
-    `평균 답변 점수: ${average}점`;
-
-  const satisfactionText = document.createElement("p");
-  satisfactionText.textContent =
-    `현재 만족도: ${state.satisfaction}%`;
-
-  const resultText = document.createElement("p");
-  resultText.textContent =
-    average >= 80
-      ? "우수한 상담입니다. 고객의 상황을 고려한 설명이 돋보입니다."
-      : average >= 60
-        ? "기본적인 상담을 마쳤습니다. 상품과 관련 기준을 더 공부해 보세요."
-        : "상담 내용을 보완할 필요가 있습니다. 질문의 핵심을 먼저 파악해 보세요.";
-
-  review.append(
-    title,
-    averageText,
-    satisfactionText,
-    resultText
+  state.satisfaction = Math.round(
+    (state.satisfaction * state.completed + customer.satisfaction) /
+    (state.completed + 1)
   );
 
-  $("answer-list").appendChild(review);
-
-  $("feedback").textContent =
-    "실제 금융 업무에서는 반드시 최신 상품 약관과 내부 심사 기준을 확인해야 합니다.";
-
-  $("finish-button").classList.remove("hidden");
-}
-
-/* =========================================
-   상담 완료
-========================================= */
-
-function finishConsultation() {
-  if (!state.active) return;
-
-  const customer = state.active;
-
-  const average = state.answers.reduce(
-    (sum, score) => sum + score,
-    0
-  ) / Math.max(state.answers.length, 1);
-
-  state.sales += Math.round(average * 1000);
-
-  if (customer.person && state.scene) {
-    state.leaving.push({
-      person: customer.person,
-      targetX: Math.random() * 8 - 4,
-      targetZ: -8
-    });
+  if (elements.feedback) {
+    elements.feedback.style.display = "block";
+    elements.feedback.textContent =
+      score >= 90
+        ? "좋습니다! 고객의 상황을 고려한 구체적인 상담이었습니다."
+        : score >= 80
+        ? "좋은 답변입니다. 고객에게 필요한 내용을 잘 안내했습니다."
+        : "답변이 접수되었습니다. 조금 더 구체적으로 설명하면 좋겠습니다.";
   }
 
-  state.active = null;
-  state.answers = [];
+  state.currentStep++;
 
-  $("customer-panel").classList.add("hidden");
-  $("finish-button").classList.add("hidden");
-
-  updateHUD();
-  renderQueue();
-
-  showToast(customer.name + " 고객 상담 완료");
-}
-
-/* =========================================
-   고객 퇴장
-========================================= */
-
-function updateLeaving(delta) {
-  for (let i = state.leaving.length - 1; i >= 0; i--) {
-    const customer = state.leaving[i];
-
-    const person = customer.person;
-
-    const dx = customer.targetX - person.position.x;
-    const dz = customer.targetZ - person.position.z;
-
-    const distance = Math.sqrt(dx * dx + dz * dz);
-
-    if (distance < 0.15) {
-      state.scene.remove(person);
-      state.leaving.splice(i, 1);
-      continue;
+  if (state.currentStep >= customer.steps.length) {
+    if (elements.answerList) {
+      elements.answerList.innerHTML = "";
     }
 
-    const amount = Math.min(delta * 2, distance);
+    if (elements.customerMessage) {
+      elements.customerMessage.textContent =
+        "상담이 모두 완료되었습니다. 고객에게 마지막 안내를 진행해 주세요.";
+    }
 
-    person.position.x += dx / distance * amount;
-    person.position.z += dz / distance * amount;
-    person.rotation.y = Math.atan2(dx, dz);
+    if (elements.finishButton) {
+      elements.finishButton.style.display = "block";
+      elements.finishButton.textContent = "상담 완료 및 고객 보내기";
+    }
+
+    if (elements.stepCount) {
+      elements.stepCount.textContent = `${customer.steps.length} / ${customer.steps.length}`;
+    }
+
+    if (elements.progressBar) {
+      elements.progressBar.style.width = "100%";
+    }
+  } else {
+    renderQuestion();
   }
 }
 
-/* =========================================
-   시간 및 신규 고객
-========================================= */
+function finishCustomer() {
+  const customer = state.currentCustomer;
+  if (!customer) return;
 
-function updateGame(delta) {
-  if (!state.started) return;
+  state.completed++;
 
-  state.minutes += delta * 3;
+  // 상담 완료에 따른 실적 반영
+  const salesByType = {
+    "정기예금": 5000,
+    "예금 재예치": 3000,
+    "출자금": 500,
+    "정기적금": 100,
+    "체크카드": 30,
+    "햇살론": 1000,
+    "담보대출": 10000,
+    "전세자금대출": 8000,
+    "화재공제": 200,
+    "상속": 0,
+    "대출 연장": 0
+  };
 
-  if (state.minutes >= 1020) {
-    state.minutes = 540;
-    state.day++;
+  state.sales += salesByType[customer.type] || 0;
+
+  if (elements.customerPanel) {
+    elements.customerPanel.style.display = "none";
   }
 
-  state.spawnElapsed += delta;
-
-  if (
-    state.spawnElapsed >= 15 &&
-    state.waiting.length < 8
-  ) {
-    state.spawnElapsed = 0;
-
-    addCustomer();
-    showToast("새로운 고객이 방문했습니다.");
+  if (customer.person) {
+    customer.person.userData.targetZ = -5;
+    customer.person.userData.walking = true;
+    customer.person.userData.onArrive = () => {
+      if (customer.person && state.scene) {
+        state.scene.remove(customer.person);
+      }
+    };
   }
 
-  updateHUD();
-}
+  state.currentCustomer = null;
+  state.currentStep = 0;
 
-/* =========================================
-   영업 시작
-========================================= */
-
-function startGame() {
-  if (state.started) return;
-
-  state.started = true;
-
-  $("start-screen").classList.add("hidden");
-
-  for (let i = 0; i < 6; i++) {
-    addCustomer();
+  if (elements.callButton) {
+    elements.callButton.disabled = false;
   }
 
   updateHUD();
   renderQueue();
 
-  showToast("영업을 시작합니다. 다음 고객을 호출하세요.");
+  showToast(`${customer.name} 고객 상담이 완료되었습니다.`);
 }
 
-/* =========================================
-   3D 애니메이션
-========================================= */
+// ------------------------------
+// Three.js 3D 은행 공간
+// ------------------------------
 
-function animate(timestamp = 0) {
-  if (!state.threeReady) return;
+async function initializeThree() {
+  if (!elements.sceneContainer) return;
+
+  try {
+    const THREE = await import(
+      "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    );
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xe8eef5);
+    scene.fog = new THREE.Fog(0xe8eef5, 12, 30);
+
+    // 낮은 정면 시점 카메라
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      elements.sceneContainer.clientWidth /
+      Math.max(elements.sceneContainer.clientHeight, 1),
+      0.1,
+      100
+    );
+
+    // 카메라 높이를 낮춰 위에서 내려다보는 느낌 제거
+    camera.position.set(0, 1.8, 9);
+    camera.lookAt(0, 1.45, 0);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false
+    });
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(
+      elements.sceneContainer.clientWidth,
+      elements.sceneContainer.clientHeight
+    );
+
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    elements.sceneContainer.innerHTML = "";
+    elements.sceneContainer.appendChild(renderer.domElement);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x778899, 2));
+
+    const light = new THREE.DirectionalLight(0xffffff, 2.2);
+    light.position.set(-4, 8, 6);
+    light.castShadow = true;
+    scene.add(light);
+
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      color: 0xc8d2dc,
+      roughness: 0.9
+    });
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 30),
+      floorMaterial
+    );
+
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.03;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // 벽
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(18, 6, 0.3),
+      new THREE.MeshStandardMaterial({ color: 0xf5f7fa })
+    );
+    wall.position.set(0, 3, -4);
+    scene.add(wall);
+
+    // 창구 책상
+    const counter = new THREE.Mesh(
+      new THREE.BoxGeometry(7, 1.05, 1.1),
+      new THREE.MeshStandardMaterial({ color: 0x8b684c })
+    );
+
+    counter.position.set(0, 0.55, 0.4);
+    counter.castShadow = true;
+    counter.receiveShadow = true;
+    scene.add(counter);
+
+    // 창구 상판
+    const counterTop = new THREE.Mesh(
+      new THREE.BoxGeometry(7.2, 0.12, 1.3),
+      new THREE.MeshStandardMaterial({ color: 0x4d372b })
+    );
+
+    counterTop.position.set(0, 1.13, 0.4);
+    scene.add(counterTop);
+
+    // 모니터
+    const monitor = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.75, 0.12),
+      new THREE.MeshStandardMaterial({ color: 0x222b35 })
+    );
+
+    monitor.position.set(-1.2, 1.75, 0.2);
+    scene.add(monitor);
+
+    const screen = new THREE.Mesh(
+      new THREE.BoxGeometry(0.98, 0.6, 0.02),
+      new THREE.MeshStandardMaterial({
+        color: 0x78a9ca,
+        emissive: 0x163c55
+      })
+    );
+
+    screen.position.set(-1.2, 1.75, 0.12);
+    scene.add(screen);
+
+    // 키보드
+    const keyboard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.05, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0x333333 })
+    );
+
+    keyboard.position.set(0.2, 1.22, 0.1);
+    scene.add(keyboard);
+
+    // 창구 표지판
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(3.4, 0.55, 0.12),
+      new THREE.MeshStandardMaterial({ color: 0x174b79 })
+    );
+
+    sign.position.set(0, 2.9, -3.7);
+    scene.add(sign);
+
+    // 대기 의자
+    for (let i = 0; i < 4; i++) {
+      const chair = new THREE.Group();
+
+      const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.15, 0.7),
+        new THREE.MeshStandardMaterial({ color: 0x456b83 })
+      );
+
+      seat.position.y = 0.55;
+      chair.add(seat);
+
+      const back = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.8, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x456b83 })
+      );
+
+      back.position.set(0, 0.95, -0.28);
+      chair.add(back);
+
+      chair.position.set(-3.8 + i * 2.4, 0, -2.5);
+      scene.add(chair);
+    }
+
+    state.scene = scene;
+    state.camera = camera;
+    state.renderer = renderer;
+    state.THREE = THREE;
+    state.threeReady = true;
+
+    // 기존 대기 고객도 3D 캐릭터 생성
+    state.customers.forEach(customer => {
+      if (!customer.person) {
+        customer.person = createPerson(customer);
+        if (customer.person) {
+          customer.person.position.set(
+            random(-5, 5) * 0.2,
+            0,
+            -2.5
+          );
+        }
+      }
+    });
+
+    window.addEventListener("resize", resizeScene);
+
+    animate();
+  } catch (error) {
+    console.error("3D 화면 초기화 오류:", error);
+    state.threeReady = false;
+
+    elements.sceneContainer.style.background =
+      "linear-gradient(#e8eef5, #c8d2dc)";
+
+    showToast("3D 화면을 불러오지 못했습니다. 상담 기능은 계속 이용할 수 있습니다.");
+  }
+}
+
+function createPerson(customer) {
+  if (!state.THREE || !state.scene) return null;
+
+  const THREE = state.THREE;
+  const group = new THREE.Group();
+
+  const skinColors = [0xffd1b1, 0xe8b99a, 0xc58b68, 0xf0c9a7];
+  const hairColors = [0x24170f, 0x39251b, 0x171717, 0x5b4030];
+  const clothesColors = [
+    0x426b91, 0x7c536d, 0x4e6657, 0x665d85,
+    0x9a744e, 0x456d76, 0x8a5550
+  ];
+
+  const skin = skinColors[random(0, skinColors.length - 1)];
+  const hair = hairColors[random(0, hairColors.length - 1)];
+  const clothes = clothesColors[random(0, clothesColors.length - 1)];
+
+  const skinMaterial = new THREE.MeshStandardMaterial({ color: skin });
+  const hairMaterial = new THREE.MeshStandardMaterial({ color: hair });
+  const clothesMaterial = new THREE.MeshStandardMaterial({ color: clothes });
+  const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x252525 });
+  const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x161616 });
+
+  function ball(x, y, z, sx, sy, sz, material) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 20, 16),
+      material
+    );
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    mesh.castShadow = true;
+    group.add(mesh);
+    return mesh;
+  }
+
+  function box(x, y, z, sx, sy, sz, material) {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(sx, sy, sz),
+      material
+    );
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    group.add(mesh);
+    return mesh;
+  }
+
+  // 몸통
+  box(0, 1.05, 0, 0.62, 0.85, 0.35, clothesMaterial);
+
+  // 목
+  ball(0, 1.55, 0, 0.14, 0.18, 0.14, skinMaterial);
+
+  // 얼굴
+  ball(0, 1.92, 0, 0.34, 0.42, 0.3, skinMaterial);
+
+  // 머리카락
+  ball(0, 2.12, -0.01, 0.35, 0.3, 0.31, hairMaterial);
+  ball(0, 2.22, 0.12, 0.27, 0.13, 0.2, hairMaterial);
+
+  // 귀
+  ball(-0.34, 1.91, 0, 0.07, 0.11, 0.08, skinMaterial);
+  ball(0.34, 1.91, 0, 0.07, 0.11, 0.08, skinMaterial);
+
+  // 눈
+  ball(-0.12, 1.98, 0.27, 0.035, 0.045, 0.025, eyeMaterial);
+  ball(0.12, 1.98, 0.27, 0.035, 0.045, 0.025, eyeMaterial);
+
+  // 코
+  ball(0, 1.89, 0.3, 0.055, 0.08, 0.06, skinMaterial);
+
+  // 입
+  const mouth = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.025, 0.025),
+    new THREE.MeshStandardMaterial({ color: 0x8f4747 })
+  );
+  mouth.position.set(0, 1.78, 0.29);
+  group.add(mouth);
+
+  // 팔
+  const armLeft = box(-0.39, 1.05, 0, 0.16, 0.65, 0.17, clothesMaterial);
+  const armRight = box(0.39, 1.05, 0, 0.16, 0.65, 0.17, clothesMaterial);
+
+  armLeft.rotation.z = -0.1;
+  armRight.rotation.z = 0.1;
+
+  // 손
+  ball(-0.4, 0.7, 0.02, 0.09, 0.1, 0.09, skinMaterial);
+  ball(0.4, 0.7, 0.02, 0.09, 0.1, 0.09, skinMaterial);
+
+  // 다리
+  box(-0.17, 0.32, 0, 0.2, 0.55, 0.22, darkMaterial);
+  box(0.17, 0.32, 0, 0.2, 0.55, 0.22, darkMaterial);
+
+  // 신발
+  ball(-0.17, 0.06, 0.08, 0.15, 0.08, 0.25, darkMaterial);
+  ball(0.17, 0.06, 0.08, 0.15, 0.08, 0.25, darkMaterial);
+
+  group.position.set(random(-5, 5) * 0.2, 0, -2.5);
+  group.rotation.y = Math.PI;
+
+  group.userData = {
+    walking: false,
+    targetZ: -2.5,
+    onArrive: null,
+    customer
+  };
+
+  state.scene.add(group);
+  state.people.push(group);
+
+  return group;
+}
+
+function animate() {
+  if (!state.renderer || !state.scene || !state.camera) return;
 
   requestAnimationFrame(animate);
 
-  const delta = Math.min(
-    (timestamp - state.lastFrame) / 1000 || 0,
-    0.05
-  );
+  const delta = 0.016;
 
-  state.lastFrame = timestamp;
+  state.people.forEach(person => {
+    if (!person.userData.walking) return;
 
-  updateMovement(delta);
-  updateLeaving(delta);
-  updateGame(delta);
+    const target = person.userData.targetZ;
+    const difference = target - person.position.z;
 
-  state.renderer.render(
-    state.scene,
-    state.camera
-  );
+    if (Math.abs(difference) > 0.06) {
+      person.position.z += Math.sign(difference) * delta * 1.8;
+
+      // 걸을 때 팔과 몸을 살짝 움직임
+      person.rotation.z = Math.sin(Date.now() * 0.01) * 0.025;
+    } else {
+      person.position.z = target;
+      person.userData.walking = false;
+      person.rotation.z = 0;
+
+      const callback = person.userData.onArrive;
+      person.userData.onArrive = null;
+
+      if (typeof callback === "function") {
+        callback();
+      }
+    }
+  });
+
+  state.renderer.render(state.scene, state.camera);
 }
 
-/* =========================================
-   화면 크기 변경
-========================================= */
+function resizeScene() {
+  if (!state.camera || !state.renderer || !elements.sceneContainer) return;
 
-function resizeGame() {
-  if (!state.threeReady) return;
+  const width = elements.sceneContainer.clientWidth;
+  const height = Math.max(elements.sceneContainer.clientHeight, 1);
 
-  state.camera.aspect =
-    window.innerWidth / window.innerHeight;
-
+  state.camera.aspect = width / height;
   state.camera.updateProjectionMatrix();
 
-  state.renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-  );
-
-  state.renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio || 1, 1.5)
-  );
+  state.renderer.setSize(width, height);
 }
 
-/* =========================================
-   버튼 이벤트
-========================================= */
+// ------------------------------
+// 실행
+// ------------------------------
 
-function connectButtons() {
-  $("start-button").addEventListener("click", startGame);
-  $("call-button").addEventListener("click", callCustomer);
-  $("finish-button").addEventListener("click", finishConsultation);
+function checkElements() {
+  const required = [
+    "start-button",
+    "call-button",
+    "finish-button",
+    "answer-list",
+    "customer-panel",
+    "queue-list"
+  ];
 
-  window.addEventListener("resize", resizeGame);
+  const missing = required.filter(id => !$(id));
+
+  if (missing.length) {
+    console.error("index.html에서 찾을 수 없는 요소:", missing);
+    showToast("화면 구성 요소를 찾지 못했습니다. index.html을 확인해 주세요.");
+  }
 }
-
-/* =========================================
-   프로그램 실행
-========================================= */
 
 function main() {
   checkElements();
-
-  // 가장 먼저 버튼 이벤트 연결
   connectButtons();
 
-  // 화면 정보 초기화
+  if (elements.callButton) {
+    elements.callButton.disabled = false;
+  }
+
+  if (elements.customerPanel) {
+    elements.customerPanel.style.display = "none";
+  }
+
+  if (elements.finishButton) {
+    elements.finishButton.style.display = "none";
+  }
+
+  if (elements.day) {
+    elements.day.textContent = "영업일";
+  }
+
   updateHUD();
   renderQueue();
 
-  // 3D 초기화는 버튼 연결 이후 진행
+  // 3D 화면 로딩은 상담 기능과 별도로 진행
   initializeThree();
 }
 
-try {
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", main);
+} else {
   main();
-} catch (error) {
-  console.error("게임 실행 오류:", error);
-  alert("게임 초기화 오류: " + error.message);
 }
-
-// ===================================
-// 기본 설정 및 HTML 요소
-// ===================================
-
-const $ = id => document.getElementById(id);
-
-const requiredIds = [
-  "scene-container", "start-screen", "start-button",
-  "call-button", "finish-button", "queue-list",
-  "waiting-count", "customer-panel", "customer-name",
-  "customer-number", "customer-info", "step-count",
-  "progress-bar", "customer-message", "answer-list",
-  "feedback", "day", "clock", "sales", "satisfaction",
-  "toast"
-];
-
-for (const id of requiredIds) {
-  if (!$(id)) {
-    throw new Error(`HTML 요소를 찾을 수 없습니다: ${id}`);
-  }
-}
-
-const container = $("scene-container");
-
-// ===================================
-// 3D 장면
-// ===================================
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xd9e8eb);
-scene.fog = new THREE.Fog(0xd9e8eb, 20, 38);
-
-const camera = new THREE.PerspectiveCamera(
-  48,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  100
-);
-
-camera.position.set(0, 5.2, 13);
-camera.lookAt(0, 1.5, -2);
-
-const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  alpha: false
-});
-
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-// 그림자 렌더링으로 생기는 흰색 깨짐 현상 방지
-renderer.shadowMap.enabled = false;
-
-container.appendChild(renderer.domElement);
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x84959c, 2.1));
-
-const mainLight = new THREE.DirectionalLight(0xffffff, 1.8);
-mainLight.position.set(-5, 10, 8);
-scene.add(mainLight);
-
-// ===================================
-// 3D 제작 함수
-// ===================================
-
-function material(color, roughness = 0.8) {
-  return new THREE.MeshStandardMaterial({
-    color,
-    roughness
-  });
-}
-
-function cube(parent, x, y, z, sx, sy, sz, color) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(sx, sy, sz),
-    material(color)
-  );
-
-  mesh.position.set(x, y, z);
-  parent.add(mesh);
-
-  return mesh;
-}
-
-function ball(parent, x, y, z, sx, sy, sz, color) {
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 20, 16),
-    material(color)
-  );
-
-  mesh.position.set(x, y, z);
-  mesh.scale.set(sx, sy, sz);
-  parent.add(mesh);
-
-  return mesh;
-}
-
-function cylinder(parent, x, y, z, radius, height, color) {
-  const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius, height, 12),
-    material(color)
-  );
-
-  mesh.position.set(x, y, z);
-  parent.add(mesh);
-
-  return mesh;
-}
-
-function capsule(parent, x, y, z, radius, length, color) {
-  const mesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(radius, length, 4, 8),
-    material(color)
-  );
-
-  mesh.position.set(x, y, z);
-  parent.add(mesh);
-
-  return mesh;
-}
-
-// ===================================
-// 은행 내부
-// ===================================
-
-// 바닥
-cube(scene, 0, -0.2, -2, 19, 0.4, 21, 0xd7d5ce);
-
-// 뒷벽
-cube(scene, 0, 3, -12, 19, 6, 0.3, 0xe8efec);
-
-// 양쪽 벽
-cube(scene, -9.5, 3, -2, 0.3, 6, 20, 0xe8efec);
-cube(scene, 9.5, 3, -2, 0.3, 6, 20, 0xe8efec);
-
-// 천장
-cube(scene, 0, 6.2, -2, 19, 0.3, 21, 0xf5f7f4);
-
-// 창문: 겹치는 흰색 프레임 제거
-cube(scene, -5.4, 3.1, -11.78, 5, 2.2, 0.08, 0x8fbecb);
-
-// 벽 장식
-cube(scene, 4.5, 3, -11.7, 5, 3.5, 0xd3e6dd);
-
-// 신협 간판
-cube(scene, 0, 5, -11.55, 5.5, 0.8, 0.2, 0x087b68);
-
-// 창구 책상
-cube(scene, 0, 1.05, 2, 9, 1.15, 1, 0x947052);
-cube(scene, 0, 1.65, 2, 9.2, 0.14, 1.1, 0x65452f);
-
-// 모니터
-cube(scene, -2, 2.25, 1.65, 1.25, 0.9, 0.12, 0x293a48);
-cube(scene, -2, 2.25, 1.57, 1.12, 0.72, 0x9ec8cf);
-cube(scene, -2, 1.75, 1.65, 0.16, 0.25, 0x465763);
-
-// 키보드
-cube(scene, -0.4, 1.76, 2, 1.2, 0.06, 0.38, 0x29343d);
-
-// 창구 번호판
-cube(scene, 3.1, 2.05, 1.65, 1.1, 0.6, 0.15, 0x087b68);
-
-// ===================================
-// 대기석
-// ===================================
-
-const seatPositions = [
-  [-5.5, -3], [-3.3, -3], [-1.1, -3],
-  [1.1, -3], [3.3, -3], [5.5, -3],
-  [-5.5, -6], [-3.3, -6], [-1.1, -6],
-  [1.1, -6], [3.3, -6], [5.5, -6]
-];
-
-function makeChair(x, z) {
-  const group = new THREE.Group();
-
-  cube(group, 0, 0.65, 0, 0.85, 0.15, 0.8, 0x567989);
-  cube(group, 0, 1.1, -0.32, 0.85, 0.9, 0.12, 0x567989);
-
-  for (const dx of [-0.32, 0.32]) {
-    for (const dz of [-0.25, 0.25]) {
-      cylinder(group, dx, 0.3, dz, 0.045, 0.6, 0x525b60);
-    }
-  }
-
-  group.position.set(x, 0, z);
-  scene.add(group);
-}
-
-seatPositions.forEach(position => {
-  makeChair(position[0], position[1]);
-});
-
-// ===================================
-// 캐릭터 색상
-// ===================================
-
-const skinColors = [
-  0xf2c8a5, 0xe0ae8c, 0xc98e6d,
-  0xf4d1b0, 0xd5a17d, 0xe9b995
-];
-
-const hairColors = [
-  0x211b19, 0x493326, 0x171717,
-  0x826348, 0xaaa09a, 0x3b2922
-];
-
-const clothesColors = [
-  0x315578, 0x785879, 0x548174,
-  0x9a674d, 0x435b70, 0x8586a5,
-  0x9a8051
-];
-
-// ===================================
-// 사람 캐릭터 제작
-// ===================================
-
-function createPerson(index, seated = true) {
-  const person = new THREE.Group();
-
-  const skin = skinColors[index % skinColors.length];
-  const hair = hairColors[index % hairColors.length];
-  const clothes = clothesColors[index % clothesColors.length];
-
-  // 몸통
-  capsule(
-    person,
-    0,
-    seated ? 1 : 1.05,
-    0,
-    0.36,
-    0.55,
-    clothes
-  );
-
-  // 목과 얼굴
-  cylinder(person, 0, 1.48, 0, 0.13, 0.25, skin);
-
-  const headY = seated ? 1.83 : 1.95;
-
-  ball(person, 0, headY, 0, 0.43, 0.53, 0.39, skin);
-
-  // 귀
-  ball(person, -0.42, headY, 0, 0.09, 0.15, 0.09, skin);
-  ball(person, 0.42, headY, 0, 0.09, 0.15, 0.09, skin);
-
-  // 머리카락
-  const style = index % 4;
-
-  ball(person, 0, headY + 0.28, -0.02, 0.45, 0.32, 0.41, hair);
-
-  if (style === 0) {
-    ball(person, 0, headY + 0.14, 0.3, 0.42, 0.16, 0.14, hair);
-  }
-
-  if (style === 1) {
-    ball(person, 0.34, headY - 0.08, 0, 0.14, 0.38, 0.18, hair);
-    ball(person, -0.34, headY - 0.08, 0, 0.14, 0.38, 0.18, hair);
-  }
-
-  if (style === 2) {
-    ball(person, 0, headY + 0.4, -0.1, 0.3, 0.16, 0.3, hair);
-  }
-
-  if (style === 3) {
-    ball(person, -0.2, headY + 0.18, -0.12, 0.25, 0.35, 0.28, hair);
-    ball(person, 0.2, headY + 0.18, -0.12, 0.25, 0.35, 0.28, hair);
-  }
-
-  // 눈
-  for (const x of [-0.16, 0.16]) {
-    ball(person, x, headY + 0.03, 0.35, 0.075, 0.085, 0.035, 0xffffff);
-    ball(person, x, headY + 0.03, 0.382, 0.035, 0.05, 0.02, 0x222222);
-  }
-
-  // 코와 입
-  ball(person, 0, headY - 0.09, 0.39, 0.075, 0.11, 0.08, skin);
-  ball(person, 0, headY - 0.24, 0.36, 0.13, 0.035, 0.025, 0x984e50);
-
-  // 팔
-  for (const side of [-1, 1]) {
-    const arm = capsule(
-      person,
-      side * 0.43,
-      1,
-      0,
-      0.12,
-      0.48,
-      clothes
-    );
-
-    arm.rotation.z = side * -0.2;
-
-    ball(
-      person,
-      side * 0.44,
-      0.68,
-      0.04,
-      0.13,
-      0.13,
-      0.13,
-      skin
-    );
-  }
-
-  // 다리
-  if (seated) {
-    for (const side of [-1, 1]) {
-      const leg = capsule(
-        person,
-        side * 0.2,
-        0.48,
-        0.25,
-        0.15,
-        0.42,
-        0x303a48
-      );
-
-      leg.rotation.x = Math.PI / 2.8;
-
-      cube(
-        person,
-        side * 0.2,
-        0.22,
-        0.55,
-        0.25,
-        0.13,
-        0.45,
-        0x252b31
-      );
-    }
-  } else {
-    for (const side of [-1, 1]) {
-      capsule(
-        person,
-        side * 0.2,
-        0.37,
-        0,
-        0.15,
-        0.55,
-        0x303a48
-      );
-
-      cube(
-        person,
-        side * 0.2,
-        0.08,
-        0.08,
-        0.28,
-        0.13,
-        0.45,
-        0x252b31
-      );
-    }
-  }
-
-  return person;
-}
-
-// ===================================
-// 고객 상담 데이터
-// ===================================
-
-const cases = [
-  {
-    purpose: "정기예금",
-    job: "직장인",
-    age: "50대",
-    questions: [
-      ["예금 만기 자금을 다시 맡기고 싶습니다.", "자금 사용 시기와 예치 기간을 확인한다."],
-      ["1년 정도 생각하고 있습니다.", "기간별 금리와 중도해지 조건을 안내한다."],
-      ["금리가 가장 높은 상품은 무엇인가요?", "가입 조건과 실제 적용 금리를 확인한다."],
-      ["출자금도 가입해야 하나요?", "출자금의 성격과 배당, 환급 제한을 설명한다."],
-      ["예금자보호는 어떻게 되나요?", "현재 보호제도와 적용 대상 및 한도를 확인한다."],
-      ["배우자 명의로도 가입할 수 있나요?", "명의자 본인 확인과 거래 절차를 안내한다."],
-      ["세금 혜택도 알고 싶습니다.", "대상 자격과 잔여 한도, 해당 연도 기준을 확인한다."]
-    ]
-  },
-  {
-    purpose: "햇살론",
-    job: "중소기업 근로자",
-    age: "40대",
-    questions: [
-      ["생활비 때문에 햇살론을 알아보고 있습니다.", "자금 용도와 현재 채무를 확인한다."],
-      ["현재 회사에서 근무하고 있습니다.", "재직기간과 소득 증빙을 확인한다."],
-      ["연봉은 3천만 원입니다.", "소득 증빙자료를 확인한다."],
-      ["카드론이 조금 있습니다.", "금융기관별 채무와 금리를 확인한다."],
-      ["보증은 어디에서 해주나요?", "상품별 보증기관과 심사 조건을 설명한다."],
-      ["한도는 얼마나 나오나요?", "보증 및 내부 심사 결과에 따라 달라진다고 설명한다."],
-      ["필요한 서류를 알려주세요.", "재직·소득 관련 서류를 안내한다."]
-    ]
-  },
-  {
-    purpose: "정기적금",
-    job: "회사원",
-    age: "30대",
-    questions: [
-      ["매달 100만 원씩 저축하고 싶습니다.", "월 불입 가능 금액과 목적을 확인한다."],
-      ["1년 동안 납입할 생각입니다.", "기간별 금리와 만기를 안내한다."],
-      ["우대금리를 받을 수 있나요?", "우대조건과 적용 기준을 설명한다."],
-      ["체크카드도 만들고 싶어요.", "발급 조건과 혜택을 설명한다."],
-      ["모바일로 관리하고 싶습니다.", "모바일뱅킹 가입 절차를 안내한다."],
-      ["자동이체도 설정해 주세요.", "출금 계좌와 이체일을 확인한다."],
-      ["최종 금리를 확인해 주세요.", "당일 금리와 적용 조건을 확인한다."]
-    ]
-  },
-  {
-    purpose: "전세자금대출",
-    job: "직장인",
-    age: "30대",
-    questions: [
-      ["전세자금대출을 알아보고 있습니다.", "보증금과 계약 일정, 주택 유형을 확인한다."],
-      ["보증금은 2억 원입니다.", "필요 자금과 본인 자금을 확인한다."],
-      ["다가구주택입니다.", "등기와 선순위 권리, 임대차 현황을 확인한다."],
-      ["집주인 확인도 필요한가요?", "임대인 정보와 소유권을 확인한다."],
-      ["연봉은 3천만 원입니다.", "소득과 기존 부채를 확인한다."],
-      ["보증기관 심사가 있나요?", "상품별 보증 심사 조건을 안내한다."],
-      ["언제까지 신청해야 하나요?", "상품별 신청 기한과 잔금일을 확인한다."]
-    ]
-  },
-  {
-    purpose: "화재공제",
-    job: "자영업자",
-    age: "50대",
-    questions: [
-      ["가게 화재공제를 알아보고 있습니다.", "업종과 건물, 시설 현황을 확인한다."],
-      ["건물은 제 소유입니다.", "건물 구조와 사용 용도를 확인한다."],
-      ["집기와 재고도 보장되나요?", "목적물별 보장 가능 여부를 확인한다."],
-      ["기존 보험도 있습니다.", "기존 증권과 담보를 비교한다."],
-      ["화재가 나면 보상받나요?", "가입 담보와 면책 사항을 설명한다."],
-      ["보험료를 줄일 수 있나요?", "필요 보장과 가입 금액을 점검한다."],
-      ["가입 전에 확인할 사항은요?", "약관과 고지사항, 보장 범위를 확인한다."]
-    ]
-  },
-  {
-    purpose: "비과세 예금",
-    job: "은퇴자",
-    age: "60대",
-    questions: [
-      ["목돈을 예금으로 맡기고 싶습니다.", "금액과 기간, 자금 계획을 확인한다."],
-      ["세금 혜택이 궁금합니다.", "비과세종합저축과 신협 예탁금 세제 혜택을 구분해 설명한다."],
-      ["저도 대상이 될까요?", "대상 자격과 법령상 요건을 확인한다."],
-      ["다른 은행에서도 가입했습니다.", "기존 가입 내역과 잔여 한도를 확인한다."],
-      ["조합원 가입도 필요한가요?", "조합원 여부와 세제 적용 요건을 구분한다."],
-      ["일반과세와 차이가 큰가요?", "금액과 기간에 따른 예상 세금을 비교한다."],
-      ["오늘 가입할 수 있나요?", "해당 연도 기준과 자격, 잔여 한도를 확인한다."]
-    ]
-  }
-];
-
-const names = [
-  "김영숙", "박정호", "이선희", "최민수",
-  "정미경", "강현우", "윤정자", "한지훈",
-  "서영희", "임성호", "조은정", "오상철",
-  "배정희", "문성진", "신미자", "장현수"
-];
-
-const avatars = ["👨", "👩", "👨‍🦳", "👩‍🦳"];
-
-// ===================================
-// 게임 상태
-// ===================================
-
-let customerNumber = 0;
-let waiting = [];
-let active = null;
-let leaving = [];
-let step = 0;
-let started = false;
-
-let gameTime = 540;
-let day = 1;
-let sales = 0;
-let satisfaction = 100;
-let spawnTimer = 0;
-
-let caseDeck = [];
-let caseIndex = 0;
-let answerScores = [];
-
-function nextCase() {
-  if (caseIndex >= caseDeck.length) {
-    caseDeck = [...cases].sort(() => Math.random() - 0.5);
-    caseIndex = 0;
-  }
-
-  return caseDeck[caseIndex++];
-}
-
-// ===================================
-// 고객 생성
-// ===================================
-
-function createCustomer() {
-  customerNumber++;
-
-  const index = customerNumber;
-  const data = nextCase();
-  const seat = seatPositions[(index - 1) % seatPositions.length];
-
-  const person = createPerson(index, true);
-  person.position.set(seat[0], 0, seat[1]);
-  scene.add(person);
-
-  return {
-    id: index,
-    number: index,
-    name: names[(index - 1) % names.length],
-    data,
-    avatar: avatars[index % avatars.length],
-    person,
-    x: seat[0],
-    z: seat[1],
-    targetX: seat[0],
-    targetZ: seat[1],
-    status: "waiting",
-    speed: 1.7
-  };
-}
-
-function addCustomer() {
-  if (waiting.length >= 9) return;
-
-  waiting.push(createCustomer());
-  renderQueue();
-}
-
-// ===================================
-// 대기열 표시
-// ===================================
-
-function renderQueue() {
-  $("waiting-count").textContent = `${waiting.length}명`;
-  $("queue-list").innerHTML = "";
-
-  waiting.forEach((customer, index) => {
-    const item = document.createElement("div");
-    item.className = "queue-item";
-
-    const avatar = document.createElement("div");
-    avatar.className = "queue-avatar";
-    avatar.textContent = customer.avatar;
-
-    const detail = document.createElement("div");
-    detail.className = "queue-detail";
-
-    const name = document.createElement("strong");
-    name.textContent = customer.name;
-
-    const purpose = document.createElement("small");
-    purpose.textContent = customer.data.purpose;
-
-    detail.append(name, purpose);
-
-    const number = document.createElement("span");
-    number.className = "queue-number";
-    number.textContent = `${index + 1}번`;
-
-    item.append(avatar, detail, number);
-    $("queue-list").appendChild(item);
-  });
-
-  $("call-button").disabled =
-    !started || !!active || waiting.length === 0;
-}
-
-// ===================================
-// 고객 호출
-// ===================================
-
-function callCustomer() {
-  if (!started) {
-    showToast("먼저 영업을 시작해 주세요.");
-    return;
-  }
-
-  if (active) {
-    showToast("현재 고객 상담을 먼저 완료해 주세요.");
-    return;
-  }
-
-  if (waiting.length === 0) {
-    showToast("대기 고객이 없습니다.");
-    return;
-  }
-
-  active = waiting.shift();
-
-  scene.remove(active.person);
-
-  active.person = createPerson(active.id, false);
-  active.person.position.set(active.x, 0, active.z);
-  scene.add(active.person);
-
-  active.targetX = 0;
-  active.targetZ = 0.1;
-  active.status = "walking";
-
-  answerScores = [];
-
-  $("customer-panel").classList.remove("hidden");
-  $("customer-name").textContent = active.name;
-  $("customer-number").textContent = `${active.number}번`;
-
-  $("customer-info").innerHTML = `
-    <span class="info-tag">${active.data.age}</span>
-    <span class="info-tag">${active.data.job}</span>
-    <span class="info-tag">${active.data.purpose}</span>
-  `;
-
-  $("customer-message").textContent =
-    "고객이 창구 앞으로 걸어오고 있습니다.";
-
-  $("answer-list").innerHTML = "";
-  $("feedback").textContent = "";
-  $("finish-button").classList.add("hidden");
-
-  renderQueue();
-  showToast(`${active.number}번 ${active.name} 고객 호출`);
-}
-
-// ===================================
-// 고객 이동
-// ===================================
-
-function updateMovement(delta) {
-  if (!active || active.status !== "walking") return;
-
-  const person = active.person;
-
-  const dx = active.targetX - person.position.x;
-  const dz = active.targetZ - person.position.z;
-  const distance = Math.sqrt(dx * dx + dz * dz);
-
-  if (distance < 0.1) {
-    person.position.set(active.targetX, 0, active.targetZ);
-    active.status = "consulting";
-    step = 0;
-
-    showQuestion();
-    showToast(`${active.name} 고객이 도착했습니다.`);
-    return;
-  }
-
-  const amount = Math.min(active.speed * delta, distance);
-
-  person.position.x += (dx / distance) * amount;
-  person.position.z += (dz / distance) * amount;
-  person.rotation.y = Math.atan2(dx, dz);
-
-  person.position.y =
-    Math.abs(Math.sin(performance.now() * 0.008)) * 0.04;
-}
-
-// ===================================
-// 주관식 답변 평가
-// ===================================
-
-const conceptMap = {
-  "자금": ["자금", "돈", "목돈", "금액"],
-  "사용": ["사용", "필요", "쓸", "지출", "운용"],
-  "시기": ["시기", "언제", "예정", "계획"],
-  "예치": ["예치", "맡기", "예금", "재예치"],
-  "기간": ["기간", "개월", "년", "만기"],
-  "금리": ["금리", "이율", "이자"],
-  "중도해지": ["중도해지", "중도 해지", "해지"],
-  "조건": ["조건", "요건", "기준"],
-  "출자금": ["출자금", "출자", "조합원"],
-  "배당": ["배당", "배당금"],
-  "환급": ["환급", "반환"],
-  "보호": ["보호", "예금자보호", "보호한도"],
-  "한도": ["한도", "잔여"],
-  "명의": ["명의", "본인", "명의자"],
-  "신분": ["신분증", "본인확인", "본인 확인"],
-  "세금": ["세금", "과세", "비과세", "세제"],
-  "자격": ["자격", "대상", "요건"],
-  "소득": ["소득", "연봉", "급여"],
-  "재직": ["재직", "근무", "직장"],
-  "증빙": ["증빙", "서류", "확인서", "증명서"],
-  "채무": ["채무", "부채", "대출", "카드론"],
-  "금융기관": ["금융기관", "은행", "저축은행", "카드사"],
-  "보증": ["보증", "보증기관", "보증서"],
-  "심사": ["심사", "승인", "검토"],
-  "용도": ["용도", "생활비", "사업자금", "목적"],
-  "보증금": ["보증금", "전세금", "임차보증금"],
-  "주택": ["주택", "다가구", "다세대", "아파트"],
-  "계약": ["계약", "임대차", "계약서"],
-  "등기": ["등기", "등기부", "등기사항"],
-  "선순위": ["선순위", "근저당", "권리관계"],
-  "임대인": ["임대인", "집주인", "소유자"],
-  "기한": ["기한", "신청일", "잔금일", "실행일"],
-  "업종": ["업종", "영업", "사업"],
-  "시설": ["시설", "집기", "재고", "비품"],
-  "건물": ["건물", "구조", "용도", "면적"],
-  "담보": ["담보", "보장", "특약", "가입금액"],
-  "기존보험": ["기존보험", "보험증권", "가입내역"],
-  "면책": ["면책", "보상 제외", "보상제외"],
-  "약관": ["약관", "고지", "고지사항", "보장범위"],
-  "비교": ["비교", "차이", "계산", "예상"],
-  "자동이체": ["자동이체", "이체일", "출금계좌"],
-  "모바일": ["모바일", "온뱅크", "앱", "어플"],
-  "체크카드": ["체크카드", "카드발급", "카드 혜택"]
-};
-
-function normalizeText(text) {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[.,!?~'"“”‘’·:;()\-]/g, "");
-}
-
-function getExpectedConcepts(expected) {
-  const normalized = normalizeText(expected);
-  const found = [];
-
-  for (const [concept, synonyms] of Object.entries(conceptMap)) {
-    if (
-      normalized.includes(normalizeText(concept)) ||
-      synonyms.some(word =>
-        normalized.includes(normalizeText(word))
-      )
-    ) {
-      found.push({ concept, synonyms });
-    }
-  }
-
-  return found;
-}
-
-function evaluateAnswer(answer, expected) {
-  const text = normalizeText(answer);
-  const concepts = getExpectedConcepts(expected);
-
-  if (text.length < 8) {
-    return {
-      score: 10,
-      message: "답변이 너무 짧습니다. 조금 더 구체적으로 설명해 주세요.",
-      matched: 0,
-      total: Math.max(1, concepts.length)
-    };
-  }
-
-  if (concepts.length === 0) {
-    const score = text.length >= 45 ? 85 : text.length >= 20 ? 65 : 40;
-
-    return {
-      score,
-      message: "답변을 작성했습니다. 고객의 상황에 맞는 설명인지 확인해 보세요.",
-      matched: 0,
-      total: 1
-    };
-  }
-
-  const matched = concepts.filter(item =>
-    item.synonyms.some(word =>
-      text.includes(normalizeText(word))
-    )
-  ).length;
-
-  const coverage = matched / concepts.length;
-  const detailBonus =
-    text.length >= 70 ? 15 :
-    text.length >= 35 ? 10 : 0;
-
-  const score = Math.min(
-    100,
-    Math.round(coverage * 85 + detailBonus)
-  );
-
-  let message;
-
-  if (coverage >= 0.8 && score >= 80) {
-    message = "좋은 답변입니다. 핵심 내용을 잘 설명했습니다.";
-  } else if (coverage >= 0.5) {
-    message = "일부 핵심 내용은 포함했지만 추가 설명이 필요합니다.";
-  } else {
-    message = "핵심 내용이 부족합니다. 고객 상황과 관련 기준을 더 구체적으로 설명해 주세요.";
-  }
-
-  return {
-    score,
-    message,
-    matched,
-    total: concepts.length
-  };
-}
-
-// ===================================
-// 주관식 상담 화면
-// ===================================
-
-function showQuestion() {
-  if (!active || active.status !== "consulting") return;
-
-  const questions = active.data.questions;
-  const question = questions[step];
-
-  $("customer-name").textContent = active.name;
-  $("step-count").textContent =
-    `${step + 1} / ${questions.length}`;
-
-  $("progress-bar").style.width =
-    `${((step + 1) / questions.length) * 100}%`;
-
-  $("customer-message").textContent = question[0];
-  $("answer-list").innerHTML = "";
-  $("feedback").textContent = "";
-  $("finish-button").classList.add("hidden");
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "written-answer-area";
-
-  const label = document.createElement("label");
-  label.textContent = "직원 답변을 직접 작성해 주세요.";
-
-  const textarea = document.createElement("textarea");
-  textarea.id = "written-answer";
-  textarea.placeholder =
-    "고객님께 실제로 설명하듯 작성해 주세요.\n예: 고객님의 자금 사용 시기와 예치 기간을 확인한 후 상품별 금리와 중도해지 조건을 안내해 드리겠습니다.";
-  textarea.rows = 5;
-
-  const hint = document.createElement("p");
-  hint.className = "answer-hint";
-  hint.textContent =
-    "답변을 작성한 후 제출 버튼을 눌러 주세요. Ctrl + Enter로도 제출할 수 있습니다.";
-
-  const submit = document.createElement("button");
-  submit.className = "primary-button";
-  submit.textContent = "답변 제출하기";
-  submit.addEventListener("click", submitWrittenAnswer);
-
-  wrapper.append(label, textarea, hint, submit);
-  $("answer-list").appendChild(wrapper);
-
-  textarea.addEventListener("keydown", event => {
-    if (
-      event.key === "Enter" &&
-      (event.ctrlKey || event.metaKey)
-    ) {
-      event.preventDefault();
-      submitWrittenAnswer();
-    }
-  });
-
-  textarea.focus();
-}
-
-// ===================================
-// 답변 제출
-// ===================================
-
-function submitWrittenAnswer() {
-  if (!active || active.status !== "consulting") return;
-
-  const textarea = $("written-answer");
-  if (!textarea) return;
-
-  const answer = textarea.value.trim();
-
-  if (answer.length < 8) {
-    showToast("답변을 조금 더 자세히 작성해 주세요.");
-    textarea.focus();
-    return;
-  }
-
-  const question = active.data.questions[step];
-  const expected = question[1];
-
-  const result = evaluateAnswer(answer, expected);
-  answerScores.push(result.score);
-
-  if (result.score >= 80) {
-    satisfaction = Math.min(100, satisfaction + 2);
-  } else if (result.score < 55) {
-    satisfaction = Math.max(0, satisfaction - 3);
-  }
-
-  updateHUD();
-
-  $("answer-list").innerHTML = "";
-
-  const feedbackBox = document.createElement("div");
-  feedbackBox.className = "review-box";
-
-  const title = document.createElement("strong");
-  title.textContent = `답변 평가: ${result.score}점`;
-
-  const message = document.createElement("p");
-  message.textContent = result.message;
-
-  const detail = document.createElement("small");
-  detail.textContent =
-    `핵심 개념 반영: ${result.matched} / ${result.total}`;
-
-  feedbackBox.append(title, message, detail);
-  $("answer-list").appendChild(feedbackBox);
-
-  $("feedback").textContent =
-    result.score >= 80
-      ? "고객이 설명을 이해하고 있습니다."
-      : result.score >= 55
-        ? "조금 더 자세한 안내가 있으면 좋겠습니다."
-        : "고객이 추가 설명을 필요로 할 수 있습니다.";
-
-  const next = document.createElement("button");
-  next.className = "primary-button";
-  next.style.marginTop = "12px";
-
-  if (step === active.data.questions.length - 1) {
-    next.textContent = "최종 상담 평가 확인";
-
-    next.addEventListener("click", showFinalReview);
-  } else {
-    next.textContent = "다음 고객 질문 듣기";
-
-    next.addEventListener("click", () => {
-      step++;
-      showQuestion();
-    });
-  }
-
-  $("answer-list").appendChild(next);
-}
-
-// ===================================
-// 최종 상담 평가
-// ===================================
-
-function showFinalReview() {
-  if (!active) return;
-
-  const average = answerScores.length
-    ? Math.round(
-        answerScores.reduce((a, b) => a + b, 0) /
-        answerScores.length
-      )
-    : 0;
-
-  $("customer-message").textContent =
-    "모든 상담 질문이 끝났습니다. 오늘 상담 결과를 확인해 주세요.";
-
-  $("answer-list").innerHTML = "";
-
-  const review = document.createElement("div");
-  review.className = "review-box";
-
-  const title = document.createElement("h3");
-  title.textContent = "상담 종합 평가";
-
-  const averageText = document.createElement("p");
-  averageText.textContent = `평균 답변 점수: ${average}점`;
-
-  const satisfactionText = document.createElement("p");
-  satisfactionText.textContent =
-    `현재 고객 만족도: ${satisfaction}%`;
-
-  const summary = document.createElement("p");
-  summary.textContent =
-    average >= 80
-      ? "전반적으로 핵심 내용을 잘 안내했습니다. 고객 상황을 고려한 상담이었습니다."
-      : average >= 60
-        ? "기본적인 상담은 진행했지만 구체적인 설명을 더 보완하면 좋겠습니다."
-        : "금융상품의 조건과 고객 상황을 더 꼼꼼히 확인하는 연습이 필요합니다.";
-
-  review.append(
-    title,
-    averageText,
-    satisfactionText,
-    summary
-  );
-
-  $("answer-list").appendChild(review);
-
-  $("feedback").textContent =
-    "실제 금융 업무에서는 최신 상품 약관과 내부 심사 기준을 확인해야 합니다.";
-
-  $("finish-button").classList.remove("hidden");
-}
-
-// ===================================
-// 상담 완료
-// ===================================
-
-function finishConsultation() {
-  if (!active) return;
-
-  const person = active.person;
-
-  leaving.push({
-    person,
-    targetX: Math.random() * 8 - 4,
-    targetZ: -8
-  });
-
-  const average = answerScores.length
-    ? answerScores.reduce((a, b) => a + b, 0) /
-      answerScores.length
-    : 0;
-
-  sales += Math.round(average * 1000);
-
-  const customerName = active.name;
-
-  $("customer-panel").classList.add("hidden");
-  $("finish-button").classList.add("hidden");
-
-  active = null;
-  answerScores = [];
-
-  updateHUD();
-  renderQueue();
-
-  showToast(`${customerName} 고객 상담 완료`);
-}
-
-// ===================================
-// 고객 퇴장
-// ===================================
-
-function updateLeaving(delta) {
-  for (let i = leaving.length - 1; i >= 0; i--) {
-    const customer = leaving[i];
-
-    const dx = customer.targetX - customer.person.position.x;
-    const dz = customer.targetZ - customer.person.position.z;
-
-    const distance = Math.sqrt(dx * dx + dz * dz);
-
-    if (distance < 0.15) {
-      scene.remove(customer.person);
-      leaving.splice(i, 1);
-      continue;
-    }
-
-    const amount = Math.min(delta * 2, distance);
-
-    customer.person.position.x += dx / distance * amount;
-    customer.person.position.z += dz / distance * amount;
-    customer.person.rotation.y = Math.atan2(dx, dz);
-  }
-}
-
-// ===================================
-// 게임 시간
-// ===================================
-
-function updateTime(delta) {
-  if (!started) return;
-
-  // 실제 1초가 게임 속 3분
-  gameTime += delta * 3;
-
-  if (gameTime >= 1020) {
-    gameTime = 540;
-    day++;
-
-    showToast(`${day}일차 영업이 시작되었습니다.`);
-  }
-
-  updateHUD();
-}
-
-function updateHUD() {
-  const hour = Math.floor(gameTime / 60);
-  const minute = Math.floor(gameTime % 60);
-
-  $("clock").textContent =
-    `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-
-  $("day").textContent = `${day}일차`;
-  $("sales").textContent =
-    `${sales.toLocaleString("ko-KR")}원`;
-
-  $("satisfaction").textContent = `${satisfaction}%`;
-}
-
-// ===================================
-// 신규 고객 방문
-// ===================================
-
-function updateSpawn(delta) {
-  if (!started) return;
-
-  spawnTimer += delta;
-
-  if (spawnTimer >= 15) {
-    spawnTimer = 0;
-
-    if (waiting.length < 8) {
-      addCustomer();
-      showToast("새로운 고객이 방문했습니다.");
-    }
-  }
-}
-
-// ===================================
-// 알림 메시지
-// ===================================
-
-let toastTimer = null;
-
-function showToast(message) {
-  const toast = $("toast");
-
-  toast.textContent = message;
-  toast.classList.add("show");
-
-  clearTimeout(toastTimer);
-
-  toastTimer = setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2200);
-}
-
-// ===================================
-// 영업 시작
-// ===================================
-
-function startGame() {
-  if (started) return;
-
-  started = true;
-
-  $("start-screen").classList.add("hidden");
-
-  // 시작 즉시 대기 고객 6명 생성
-  for (let i = 0; i < 6; i++) {
-    addCustomer();
-  }
-
-  updateHUD();
-  renderQueue();
-
-  showToast("영업 시작! 다음 고객을 호출하세요.");
-}
-
-// ===================================
-// 버튼 이벤트 연결
-// ===================================
-
-$("start-button").addEventListener("click", startGame);
-$("call-button").addEventListener("click", callCustomer);
-$("finish-button").addEventListener("click", finishConsultation);
-
-// ===================================
-// 애니메이션
-// ===================================
-
-const clock = new THREE.Clock();
-
-function animate() {
-  requestAnimationFrame(animate);
-
-  const delta = Math.min(clock.getDelta(), 0.05);
-
-  updateMovement(delta);
-  updateLeaving(delta);
-  updateTime(delta);
-  updateSpawn(delta);
-
-  renderer.render(scene, camera);
-}
-
-animate();
-
-// ===================================
-// 화면 크기 변경 대응
-// ===================================
-
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-});
-// 카메라 시점 설정
-camera.position.set(0, 2.2, 8.5);
-camera.lookAt(0, 1.5, 0);
-camera.fov = 45;
-camera.updateProjectionMatrix();
