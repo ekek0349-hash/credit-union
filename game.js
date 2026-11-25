@@ -2617,3 +2617,8 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 });
+// 카메라 시점 설정
+camera.position.set(0, 2.2, 8.5);
+camera.lookAt(0, 1.5, 0);
+camera.fov = 45;
+camera.updateProjectionMatrix();
